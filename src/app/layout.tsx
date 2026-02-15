@@ -13,10 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko">
       <head>
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
       <body className="bg-mc-bg text-mc-text min-h-screen">
         <Sidebar />
-        <main className="md:ml-56">{children}</main>
+        <main className="md:ml-56 pb-20 md:pb-0">{children}</main>
       </body>
     </html>
   );

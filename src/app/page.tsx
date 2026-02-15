@@ -90,7 +90,7 @@ export default function CEODashboard() {
   const completionRate = data.taskStats.total > 0 ? Math.round((data.taskStats.done / data.taskStats.total) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-mc-bg p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Title */}
         <div className="mb-8">
@@ -99,7 +99,7 @@ export default function CEODashboard() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="rounded-xl p-5 bg-gradient-to-br from-blue-600/20 to-blue-800/10 border border-blue-500/20">
             <div className="text-3xl font-bold">{completionRate}%</div>
             <div className="text-sm text-mc-text-secondary mt-1">완료율</div>
@@ -122,7 +122,7 @@ export default function CEODashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Agent Status */}
           <div className="bg-mc-bg-secondary rounded-xl border border-mc-border p-5">
             <div className="flex items-center justify-between mb-4">
@@ -208,7 +208,7 @@ export default function CEODashboard() {
         </div>
 
         {/* Bottom row: Blog + Revenue summaries */}
-        <div className="grid grid-cols-2 gap-6 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4 sm:mt-6">
           <div className="bg-mc-bg-secondary rounded-xl border border-mc-border p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">📝 블로그 성과</h2>

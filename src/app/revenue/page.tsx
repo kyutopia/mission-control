@@ -167,7 +167,7 @@ export default function RevenuePage() {
         ))}
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary">
+      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary hidden md:block">
         <table className="w-full min-w-[500px]">
           <thead className="bg-mc-bg-tertiary">
             <tr>
@@ -192,6 +192,24 @@ export default function RevenuePage() {
             ))}
           </tbody>
         </table>
+        {filteredRevenues.length === 0 && (
+          <div className="text-center py-8 text-mc-text-secondary">데이터가 없습니다.</div>
+        )}
+      </div>
+      {/* Mobile Revenue List */}
+      <div className="md:hidden space-y-2">
+        {filteredRevenues.map((rev) => (
+          <div key={rev.id} className="bg-mc-bg-secondary rounded-lg border border-mc-bg-tertiary p-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className={"px-2 py-0.5 rounded text-xs border " + (sourceColors[rev.source] || sourceColors.other)}>
+                {rev.source}
+              </span>
+              <span className="text-mc-accent-green font-medium text-sm">₩{Number(rev.amount).toLocaleString()}</span>
+            </div>
+            <p className="text-xs text-mc-text-secondary">{rev.description || "-"}</p>
+            <p className="text-xs text-mc-text-secondary/60 mt-1">{new Date(rev.date).toLocaleDateString("ko-KR")}</p>
+          </div>
+        ))}
         {filteredRevenues.length === 0 && (
           <div className="text-center py-8 text-mc-text-secondary">데이터가 없습니다.</div>
         )}

@@ -17,6 +17,7 @@ import type { Task, Workspace } from '@/lib/types';
 export default function WorkspacePage() {
   const params = useParams();
   const slug = params.slug as string;
+  const [showLiveFeed, setShowLiveFeed] = useState(false);
   
   const {
     setAgents,
@@ -30,10 +31,8 @@ export default function WorkspacePage() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  // Connect to SSE for real-time updates
   useSSE();
 
-  // Load workspace data
   useEffect(() => {
     async function loadWorkspace() {
       try {
@@ -53,27 +52,21 @@ export default function WorkspacePage() {
         return;
       }
     }
-
     loadWorkspace();
   }, [slug, setIsLoading]);
 
-  // Load workspace-specific data
   useEffect(() => {
     if (!workspace) return;
-    
     const workspaceId = workspace.id;
 
     async function loadData() {
       try {
         debug.api('Loading workspace data...', { workspaceId });
-        
-        // Fetch workspace-scoped data
         const [agentsRes, tasksRes, eventsRes] = await Promise.all([
           fetch(`/api/agents?workspace_id=${workspaceId}`),
           fetch(`/api/tasks?workspace_id=${workspaceId}`),
           fetch('/api/events'),
         ]);
-
         if (agentsRes.ok) setAgents(await agentsRes.json());
         if (tasksRes.ok) {
           const tasksData = await tasksRes.json();
@@ -88,15 +81,12 @@ export default function WorkspacePage() {
       }
     }
 
-    // Check OpenClaw connection separately (non-blocking)
     async function checkOpenClaw() {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-
         const openclawRes = await fetch('/api/openclaw/status', { signal: controller.signal });
         clearTimeout(timeoutId);
-
         if (openclawRes.ok) {
           const status = await openclawRes.json();
           setIsOnline(status.connected);
@@ -109,32 +99,26 @@ export default function WorkspacePage() {
     loadData();
     checkOpenClaw();
 
-    // Poll for events every 5 seconds
     const eventPoll = setInterval(async () => {
       try {
         const res = await fetch('/api/events?limit=20');
-        if (res.ok) {
-          setEvents(await res.json());
-        }
+        if (res.ok) setEvents(await res.json());
       } catch (error) {
         console.error('Failed to poll events:', error);
       }
     }, 5000);
 
-    // Poll tasks as SSE fallback (every 10 seconds)
     const taskPoll = setInterval(async () => {
       try {
         const res = await fetch(`/api/tasks?workspace_id=${workspaceId}`);
         if (res.ok) {
           const newTasks: Task[] = await res.json();
           const currentTasks = useMissionControl.getState().tasks;
-
           const hasChanges = newTasks.length !== currentTasks.length ||
             newTasks.some((t) => {
               const current = currentTasks.find(ct => ct.id === t.id);
               return !current || current.status !== t.status;
             });
-
           if (hasChanges) {
             debug.api('[FALLBACK] Task changes detected, updating store');
             setTasks(newTasks);
@@ -145,7 +129,6 @@ export default function WorkspacePage() {
       }
     }, 10000);
 
-    // Check OpenClaw connection every 30 seconds
     const connectionCheck = setInterval(async () => {
       try {
         const res = await fetch('/api/openclaw/status');
@@ -201,18 +184,43 @@ export default function WorkspacePage() {
     <div className="h-screen flex flex-col bg-mc-bg overflow-hidden">
       <Header workspace={workspace} />
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Agents Sidebar */}
-        <AgentsSidebar workspaceId={workspace.id} />
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Agents Sidebar - hidden on mobile */}
+        <div className="hidden md:block">
+          <AgentsSidebar workspaceId={workspace.id} />
+        </div>
 
         {/* Main Content Area */}
         <MissionQueue workspaceId={workspace.id} />
 
-        {/* Live Feed */}
-        <LiveFeed />
+        {/* Live Feed - hidden on mobile, toggled via button */}
+        <div className="hidden md:block">
+          <LiveFeed />
+        </div>
+
+        {/* Mobile Live Feed Toggle Button */}
+        <button
+          onClick={() => setShowLiveFeed(!showLiveFeed)}
+          className="md:hidden fixed bottom-20 right-4 z-40 bg-mc-accent text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-lg"
+        >
+          ⚡
+        </button>
+
+        {/* Mobile Live Feed Bottom Sheet */}
+        {showLiveFeed && (
+          <div className="md:hidden fixed inset-0 z-40 flex flex-col">
+            <div className="flex-1 bg-black/50" onClick={() => setShowLiveFeed(false)} />
+            <div className="bg-mc-bg-secondary border-t border-mc-border max-h-[60vh] overflow-y-auto rounded-t-2xl">
+              <div className="flex items-center justify-between p-3 border-b border-mc-border sticky top-0 bg-mc-bg-secondary">
+                <span className="text-sm font-medium">⚡ Live Feed</span>
+                <button onClick={() => setShowLiveFeed(false)} className="text-mc-text-secondary p-1">✕</button>
+              </div>
+              <LiveFeed />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Debug Panel - only shows when debug mode enabled */}
       <SSEDebugPanel />
     </div>
   );

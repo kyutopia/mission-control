@@ -118,7 +118,7 @@ export default function BlogPage() {
         ))}
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary">
+      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary hidden md:block">
         <table className="w-full min-w-[600px]">
           <thead className="bg-mc-bg-tertiary">
             <tr>
@@ -169,6 +169,40 @@ export default function BlogPage() {
             ))}
           </tbody>
         </table>
+        {filteredPosts.length === 0 && (
+          <div className="text-center py-8 text-mc-text-secondary">게시글이 없습니다.</div>
+        )}
+      </div>
+
+      {/* Mobile Card List */}
+      <div className="md:hidden space-y-3">
+        {filteredPosts.map((post) => (
+          <div key={post.id} className="bg-mc-bg-secondary rounded-lg border border-mc-bg-tertiary p-4">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <h3 className="text-sm font-medium flex-1">
+                {post.url ? (
+                  <a href={post.url} target="_blank" rel="noopener noreferrer" className="text-mc-accent hover:underline">
+                    {post.title}
+                  </a>
+                ) : (
+                  post.title
+                )}
+              </h3>
+              <span className={`px-2 py-0.5 rounded text-xs flex-shrink-0 ${
+                post.status === "published" ? "bg-mc-accent-green/20 text-mc-accent-green"
+                : post.status === "scheduled" ? "bg-mc-accent-yellow/20 text-mc-accent-yellow"
+                : "bg-mc-bg-tertiary text-mc-text-secondary"
+              }`}>
+                {post.status === "published" ? "발행" : post.status === "scheduled" ? "예약" : "임시"}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-mc-text-secondary">
+              {post.keyword && <span>🔑 {post.keyword}</span>}
+              <span>👁 {(post.views || 0).toLocaleString()}</span>
+              {post.published_at && <span>{new Date(post.published_at).toLocaleDateString("ko-KR")}</span>}
+            </div>
+          </div>
+        ))}
         {filteredPosts.length === 0 && (
           <div className="text-center py-8 text-mc-text-secondary">게시글이 없습니다.</div>
         )}

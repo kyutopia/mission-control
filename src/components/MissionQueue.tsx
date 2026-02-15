@@ -22,6 +22,21 @@ const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
   { id: 'done', label: '✅ 완료', color: 'border-t-mc-accent-green' },
 ];
 
+const MOBILE_TABS = [
+  { id: 'waiting', label: '대기', statuses: ['planning', 'inbox', 'assigned'] as TaskStatus[] },
+  { id: 'active', label: '진행중', statuses: ['in_progress', 'testing'] as TaskStatus[] },
+  { id: 'complete', label: '완료', statuses: ['review', 'done'] as TaskStatus[] },
+];
+
+const NEXT_STATUS: Partial<Record<TaskStatus, TaskStatus>> = {
+  planning: 'inbox',
+  inbox: 'assigned',
+  assigned: 'in_progress',
+  in_progress: 'testing',
+  testing: 'review',
+  review: 'done',
+};
+
 const PRIORITY_LABELS: Record<string, string> = {
   urgent: '🔴 긴급',
   high: '🔴 높음',
@@ -58,6 +73,7 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [mobileTab, setMobileTab] = useState<string>('waiting');
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
@@ -69,6 +85,18 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
 
   const getTasksByStatus = (status: TaskStatus) =>
     filteredTasks.filter((task) => task.status === status);
+
+  const getMobileTabTasks = (tabId: string) => {
+    const tab = MOBILE_TABS.find(t => t.id === tabId);
+    if (!tab) return [];
+    return filteredTasks.filter(t => tab.statuses.includes(t.status));
+  };
+
+  const getMobileTabCount = (tabId: string) => {
+    const tab = MOBILE_TABS.find(t => t.id === tabId);
+    if (!tab) return 0;
+    return filteredTasks.filter(t => tab.statuses.includes(t.status)).length;
+  };
 
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task);
@@ -86,9 +114,14 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
       setDraggedTask(null);
       return;
     }
-    updateTaskStatus(draggedTask.id, targetStatus);
+    await moveTask(draggedTask, targetStatus);
+    setDraggedTask(null);
+  };
+
+  const moveTask = async (task: Task, targetStatus: TaskStatus) => {
+    updateTaskStatus(task.id, targetStatus);
     try {
-      const res = await fetch(`/api/tasks/${draggedTask.id}`, {
+      const res = await fetch(`/api/tasks/${task.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
@@ -97,16 +130,15 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
         addEvent({
           id: crypto.randomUUID(),
           type: targetStatus === 'done' ? 'task_completed' : 'task_status_changed',
-          task_id: draggedTask.id,
-          message: `"${draggedTask.title}" → ${COLUMNS.find(c => c.id === targetStatus)?.label || targetStatus}`,
+          task_id: task.id,
+          message: `"${task.title}" → ${COLUMNS.find(c => c.id === targetStatus)?.label || targetStatus}`,
           created_at: new Date().toISOString(),
         });
       }
     } catch (error) {
       console.error('Failed to update task status:', error);
-      updateTaskStatus(draggedTask.id, draggedTask.status);
+      updateTaskStatus(task.id, task.status);
     }
-    setDraggedTask(null);
   };
 
   return (
@@ -122,17 +154,18 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
           className="flex items-center gap-2 px-3 py-1.5 bg-mc-accent text-white rounded text-sm font-medium hover:bg-mc-accent/90"
         >
           <Plus className="w-4 h-4" />
-          새 태스크
+          <span className="hidden sm:inline">새 태스크</span>
+          <span className="sm:hidden">추가</span>
         </button>
       </div>
 
       {/* Filter Bar */}
-      <div className="px-3 py-2 border-b border-mc-border/50 flex items-center gap-3 bg-mc-bg-secondary/50">
-        <Filter className="w-4 h-4 text-mc-text-secondary" />
+      <div className="px-3 py-2 border-b border-mc-border/50 flex items-center gap-3 bg-mc-bg-secondary/50 overflow-x-auto">
+        <Filter className="w-4 h-4 text-mc-text-secondary flex-shrink-0" />
         <select
           value={filterAgent}
           onChange={e => setFilterAgent(e.target.value)}
-          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text"
+          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text min-w-0"
         >
           <option value="all">모든 담당자</option>
           {agents.map(a => (
@@ -142,7 +175,7 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
         <select
           value={filterPriority}
           onChange={e => setFilterPriority(e.target.value)}
-          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text"
+          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text min-w-0"
         >
           <option value="all">모든 우선순위</option>
           <option value="urgent">🔴 긴급</option>
@@ -153,15 +186,55 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
         {(filterAgent !== 'all' || filterPriority !== 'all') && (
           <button
             onClick={() => { setFilterAgent('all'); setFilterPriority('all'); }}
-            className="text-xs text-mc-accent hover:underline"
+            className="text-xs text-mc-accent hover:underline flex-shrink-0"
           >
-            필터 초기화
+            초기화
           </button>
         )}
       </div>
 
-      {/* Kanban Columns */}
-      <div className="flex-1 flex gap-3 p-3 overflow-x-auto">
+      {/* Mobile Tab View */}
+      <div className="md:hidden">
+        <div className="flex border-b border-mc-border">
+          {MOBILE_TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setMobileTab(tab.id)}
+              className={`flex-1 py-3 text-sm font-medium text-center relative ${
+                mobileTab === tab.id
+                  ? 'text-mc-accent border-b-2 border-mc-accent'
+                  : 'text-mc-text-secondary'
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs ${
+                mobileTab === tab.id ? 'bg-mc-accent/20 text-mc-accent' : 'bg-mc-bg-tertiary text-mc-text-secondary'
+              }`}>
+                {getMobileTabCount(tab.id)}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {getMobileTabTasks(mobileTab).map(task => (
+            <MobileTaskCard
+              key={task.id}
+              task={task}
+              onClick={() => setEditingTask(task)}
+              onMoveNext={() => {
+                const next = NEXT_STATUS[task.status];
+                if (next) moveTask(task, next);
+              }}
+            />
+          ))}
+          {getMobileTabTasks(mobileTab).length === 0 && (
+            <div className="text-center py-8 text-mc-text-secondary text-sm">태스크가 없습니다</div>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop Kanban Columns */}
+      <div className="hidden md:flex flex-1 gap-3 p-3 overflow-x-auto">
         {COLUMNS.map((column) => {
           const columnTasks = getTasksByStatus(column.id);
           return (
@@ -240,6 +313,54 @@ function TaskCard({ task, onDragStart, onClick, isDragging }: TaskCardProps) {
             {formatDistanceToNow(new Date(task.created_at), { addSuffix: true, locale: ko })}
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface MobileTaskCardProps {
+  task: Task;
+  onClick: () => void;
+  onMoveNext: () => void;
+}
+
+function MobileTaskCard({ task, onClick, onMoveNext }: MobileTaskCardProps) {
+  const agentName = (task.assigned_agent as unknown as { name: string })?.name;
+  const agentEmoji = (task.assigned_agent as unknown as { avatar_emoji: string })?.avatar_emoji;
+  const nextStatus = NEXT_STATUS[task.status];
+  const nextLabel = nextStatus ? COLUMNS.find(c => c.id === nextStatus)?.label : null;
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-mc-bg-secondary border border-mc-border/50 rounded-lg p-3 active:scale-[0.98] transition-transform"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-medium leading-snug line-clamp-2">{task.title}</h4>
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className={`text-xs px-2 py-0.5 rounded ${PRIORITY_BADGE[task.priority]}`}>
+              {PRIORITY_LABELS[task.priority]}
+            </span>
+            {agentName && (
+              <span className="text-xs text-mc-text-secondary">
+                {agentEmoji} {agentName}
+              </span>
+            )}
+            <span className="text-xs text-mc-text-secondary/60">
+              {formatDistanceToNow(new Date(task.created_at), { addSuffix: true, locale: ko })}
+            </span>
+          </div>
+        </div>
+        {nextLabel && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveNext(); }}
+            className="flex-shrink-0 text-xs px-2 py-1.5 bg-mc-accent/20 text-mc-accent rounded hover:bg-mc-accent/30 min-h-[36px]"
+            title={`→ ${nextLabel}`}
+          >
+            →
+          </button>
+        )}
       </div>
     </div>
   );
