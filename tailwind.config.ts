@@ -9,20 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Dark theme colors matching the screenshot
-        'mc-bg': '#0d1117',
-        'mc-bg-secondary': '#161b22',
-        'mc-bg-tertiary': '#21262d',
-        'mc-border': '#30363d',
-        'mc-text': '#c9d1d9',
-        'mc-text-secondary': '#8b949e',
-        'mc-accent': '#58a6ff',
-        'mc-accent-green': '#3fb950',
-        'mc-accent-yellow': '#d29922',
-        'mc-accent-red': '#f85149',
-        'mc-accent-purple': '#a371f7',
-        'mc-accent-pink': '#db61a2',
-        'mc-accent-cyan': '#39d353',
+        'mc-bg': '#0F172A',
+        'mc-bg-secondary': '#1E293B',
+        'mc-bg-tertiary': '#334155',
+        'mc-border': '#475569',
+        'mc-text': '#F8FAFC',
+        'mc-text-secondary': '#94A3B8',
+        'mc-accent': '#2563EB',
+        'mc-accent-green': '#22C55E',
+        'mc-accent-yellow': '#F59E0B',
+        'mc-accent-red': '#EF4444',
+        'mc-accent-purple': '#A855F7',
+        'mc-accent-pink': '#EC4899',
+        'mc-accent-cyan': '#06B6D4',
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
@@ -31,5 +30,4 @@ const config: Config = {
   },
   plugins: [],
 };
-
 export default config;

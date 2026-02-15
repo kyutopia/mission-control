@@ -1,28 +1,23 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import Sidebar from '@/components/Sidebar';
 
 export const metadata: Metadata = {
-  title: 'Mission Control',
-  description: 'AI Agent Orchestration Dashboard',
-  icons: {
-    icon: '/favicon.svg',
-  },
+  title: 'KYUTOPIA Mission Control',
+  description: 'KYUTOPIA AI Agent Orchestration Dashboard',
+  icons: { icon: '/favicon.svg' },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="bg-mc-bg text-mc-text min-h-screen">{children}</body>
+      <body className="bg-mc-bg text-mc-text min-h-screen">
+        <Sidebar />
+        <main className="md:ml-56">{children}</main>
+      </body>
     </html>
   );
 }

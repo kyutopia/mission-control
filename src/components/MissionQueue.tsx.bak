@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Plus, ChevronRight, GripVertical, Filter } from 'lucide-react';
 import { useMissionControl } from '@/lib/store';
-import type { Task, TaskStatus } from '@/lib/types';
+import type { Task, TaskStatus, TaskPriority } from '@/lib/types';
 import { TaskModal } from './TaskModal';
 import { formatDistanceToNow } from 'date-fns';
-import { ko } from 'date-fns/locale';
 
 interface MissionQueueProps {
   workspaceId?: string;
@@ -22,33 +21,27 @@ const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
   { id: 'done', label: '✅ 완료', color: 'border-t-mc-accent-green' },
 ];
 
-const PRIORITY_LABELS: Record<string, string> = {
-  urgent: '🔴 긴급',
-  high: '🔴 높음',
-  normal: '🟡 보통',
-  low: '🟢 낮음',
+const PRIORITY_BADGE: Record<TaskPriority, { label: string; emoji: string; class: string }> = {
+  urgent: { label: '긴급', emoji: '🔴', class: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+  high: { label: '높음', emoji: '🔴', class: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+  normal: { label: '보통', emoji: '🟡', class: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' },
+  low: { label: '낮음', emoji: '🟢', class: 'bg-green-500/20 text-green-400 border border-green-500/30' },
 };
 
-const PRIORITY_BADGE: Record<string, string> = {
-  urgent: 'bg-red-500/20 text-red-400 border border-red-500/30',
-  high: 'bg-red-500/20 text-red-400 border border-red-500/30',
-  normal: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-  low: 'bg-green-500/20 text-green-400 border border-green-500/30',
+// Agent color mapping for KYUTOPIA team
+const AGENT_COLORS: Record<string, string> = {
+  '도윤': 'border-l-blue-500',
+  '건우': 'border-l-green-500',
+  '솔희': 'border-l-purple-500',
+  '동규': 'border-l-amber-500',
 };
 
-const AGENT_BORDER_COLORS: Record<string, string> = {
-  '도윤': 'border-l-[3px] border-l-blue-500',
-  '건우': 'border-l-[3px] border-l-green-500',
-  '솔희': 'border-l-[3px] border-l-purple-500',
-  '동규': 'border-l-[3px] border-l-yellow-500',
-};
-
-function getAgentBorderClass(agentName?: string): string {
+function getAgentColor(agentName?: string): string {
   if (!agentName) return '';
-  for (const [key, cls] of Object.entries(AGENT_BORDER_COLORS)) {
-    if (agentName.includes(key)) return cls;
+  for (const [name, color] of Object.entries(AGENT_COLORS)) {
+    if (agentName.includes(name)) return color;
   }
-  return '';
+  return 'border-l-slate-500';
 }
 
 export function MissionQueue({ workspaceId }: MissionQueueProps) {
@@ -59,13 +52,11 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(t => {
-      if (filterAgent !== 'all' && t.assigned_agent_id !== filterAgent) return false;
-      if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
-      return true;
-    });
-  }, [tasks, filterAgent, filterPriority]);
+  const filteredTasks = tasks.filter((task) => {
+    if (filterAgent !== 'all' && task.assigned_agent_id !== filterAgent) return false;
+    if (filterPriority !== 'all' && task.priority !== filterPriority) return false;
+    return true;
+  });
 
   const getTasksByStatus = (status: TaskStatus) =>
     filteredTasks.filter((task) => task.status === status);
@@ -86,19 +77,22 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
       setDraggedTask(null);
       return;
     }
+
     updateTaskStatus(draggedTask.id, targetStatus);
+
     try {
       const res = await fetch(`/api/tasks/${draggedTask.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
       });
+
       if (res.ok) {
         addEvent({
           id: crypto.randomUUID(),
           type: targetStatus === 'done' ? 'task_completed' : 'task_status_changed',
           task_id: draggedTask.id,
-          message: `"${draggedTask.title}" → ${COLUMNS.find(c => c.id === targetStatus)?.label || targetStatus}`,
+          message: `Task "${draggedTask.title}" moved to ${targetStatus}`,
           created_at: new Date().toISOString(),
         });
       }
@@ -106,8 +100,11 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
       console.error('Failed to update task status:', error);
       updateTaskStatus(draggedTask.id, draggedTask.status);
     }
+
     setDraggedTask(null);
   };
+
+  const hasActiveFilters = filterAgent !== 'all' || filterPriority !== 'all';
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -122,42 +119,53 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
           className="flex items-center gap-2 px-3 py-1.5 bg-mc-accent text-white rounded text-sm font-medium hover:bg-mc-accent/90"
         >
           <Plus className="w-4 h-4" />
-          새 태스크
+          New Task
         </button>
       </div>
 
       {/* Filter Bar */}
       <div className="px-3 py-2 border-b border-mc-border/50 flex items-center gap-3 bg-mc-bg-secondary/50">
-        <Filter className="w-4 h-4 text-mc-text-secondary" />
+        <Filter className={`w-4 h-4 ${hasActiveFilters ? 'text-mc-accent' : 'text-mc-text-secondary'}`} />
+        
+        {/* Agent Filter */}
         <select
           value={filterAgent}
-          onChange={e => setFilterAgent(e.target.value)}
-          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text"
+          onChange={(e) => setFilterAgent(e.target.value)}
+          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-xs focus:outline-none focus:border-mc-accent"
         >
-          <option value="all">모든 담당자</option>
-          {agents.map(a => (
-            <option key={a.id} value={a.id}>{a.avatar_emoji} {a.name}</option>
+          <option value="all">전체 에이전트</option>
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.avatar_emoji} {agent.name}
+            </option>
           ))}
         </select>
+
+        {/* Priority Filter */}
         <select
           value={filterPriority}
-          onChange={e => setFilterPriority(e.target.value)}
-          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-sm text-mc-text"
+          onChange={(e) => setFilterPriority(e.target.value)}
+          className="bg-mc-bg border border-mc-border rounded px-2 py-1 text-xs focus:outline-none focus:border-mc-accent"
         >
-          <option value="all">모든 우선순위</option>
+          <option value="all">전체 우선순위</option>
           <option value="urgent">🔴 긴급</option>
           <option value="high">🔴 높음</option>
           <option value="normal">🟡 보통</option>
           <option value="low">🟢 낮음</option>
         </select>
-        {(filterAgent !== 'all' || filterPriority !== 'all') && (
+
+        {hasActiveFilters && (
           <button
             onClick={() => { setFilterAgent('all'); setFilterPriority('all'); }}
             className="text-xs text-mc-accent hover:underline"
           >
-            필터 초기화
+            Clear filters
           </button>
         )}
+
+        <span className="text-xs text-mc-text-secondary ml-auto">
+          {filteredTasks.length}개 태스크
+        </span>
       </div>
 
       {/* Kanban Columns */}
@@ -171,13 +179,26 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, column.id)}
             >
+              {/* Column Header */}
               <div className="p-2 border-b border-mc-border flex items-center justify-between">
-                <span className="text-xs font-medium text-mc-text-secondary">{column.label}</span>
-                <span className="text-xs bg-mc-bg-tertiary px-2 py-0.5 rounded text-mc-text-secondary">{columnTasks.length}</span>
+                <span className="text-xs font-medium uppercase text-mc-text-secondary">
+                  {column.label}
+                </span>
+                <span className="text-xs bg-mc-bg-tertiary px-2 py-0.5 rounded text-mc-text-secondary">
+                  {columnTasks.length}
+                </span>
               </div>
+
+              {/* Tasks */}
               <div className="flex-1 overflow-y-auto p-2 space-y-2">
                 {columnTasks.map((task) => (
-                  <TaskCard key={task.id} task={task} onDragStart={handleDragStart} onClick={() => setEditingTask(task)} isDragging={draggedTask?.id === task.id} />
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onDragStart={handleDragStart}
+                    onClick={() => setEditingTask(task)}
+                    isDragging={draggedTask?.id === task.id}
+                  />
                 ))}
               </div>
             </div>
@@ -185,8 +206,13 @@ export function MissionQueue({ workspaceId }: MissionQueueProps) {
         })}
       </div>
 
-      {showCreateModal && <TaskModal onClose={() => setShowCreateModal(false)} workspaceId={workspaceId} />}
-      {editingTask && <TaskModal task={editingTask} onClose={() => setEditingTask(null)} workspaceId={workspaceId} />}
+      {/* Modals */}
+      {showCreateModal && (
+        <TaskModal onClose={() => setShowCreateModal(false)} workspaceId={workspaceId} />
+      )}
+      {editingTask && (
+        <TaskModal task={editingTask} onClose={() => setEditingTask(null)} workspaceId={workspaceId} />
+      )}
     </div>
   );
 }
@@ -199,8 +225,9 @@ interface TaskCardProps {
 }
 
 function TaskCard({ task, onDragStart, onClick, isDragging }: TaskCardProps) {
+  const badge = PRIORITY_BADGE[task.priority];
   const agentName = (task.assigned_agent as unknown as { name: string })?.name;
-  const agentBorder = getAgentBorderClass(agentName);
+  const agentColor = getAgentColor(agentName);
   const isPlanning = task.status === 'planning';
 
   return (
@@ -208,36 +235,53 @@ function TaskCard({ task, onDragStart, onClick, isDragging }: TaskCardProps) {
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onClick={onClick}
-      className={`group bg-mc-bg-secondary border rounded-lg cursor-pointer transition-all hover:shadow-lg hover:shadow-black/20 ${agentBorder} ${
-        isDragging ? 'opacity-50 scale-95' : ''
-      } ${isPlanning ? 'border-purple-500/40 hover:border-purple-500' : 'border-mc-border/50 hover:border-mc-accent/40'}`}
+      className={`group bg-mc-bg-secondary border rounded-lg cursor-pointer transition-all hover:shadow-lg hover:shadow-black/20 ${
+        agentColor ? `border-l-2 ${agentColor}` : ''
+      } ${isDragging ? 'opacity-50 scale-95' : ''} ${
+        isPlanning ? 'border-purple-500/40 hover:border-purple-500' : 'border-mc-border/50 hover:border-mc-accent/40'
+      }`}
     >
+      {/* Drag handle bar */}
       <div className="flex items-center justify-center py-1.5 border-b border-mc-border/30 opacity-0 group-hover:opacity-100 transition-opacity">
         <GripVertical className="w-4 h-4 text-mc-text-secondary/50 cursor-grab" />
       </div>
+
+      {/* Card content */}
       <div className="p-4">
-        <h4 className="text-sm font-medium leading-snug line-clamp-2 mb-3">{task.title}</h4>
+        {/* Priority Badge */}
+        <div className="flex items-center justify-between mb-2">
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.class}`}>
+            {badge.emoji} {badge.label}
+          </span>
+        </div>
+
+        {/* Title */}
+        <h4 className="text-sm font-medium leading-snug line-clamp-2 mb-3">
+          {task.title}
+        </h4>
         
+        {/* Planning mode indicator */}
         {isPlanning && (
           <div className="flex items-center gap-2 mb-3 py-2 px-3 bg-purple-500/10 rounded-md border border-purple-500/20">
             <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse flex-shrink-0" />
-            <span className="text-xs text-purple-400 font-medium">기획 진행중</span>
+            <span className="text-xs text-purple-400 font-medium">기획 계속하기</span>
           </div>
         )}
 
+        {/* Assigned agent */}
         {task.assigned_agent && (
           <div className="flex items-center gap-2 mb-3 py-1.5 px-2 bg-mc-bg-tertiary/50 rounded">
             <span className="text-base">{(task.assigned_agent as unknown as { avatar_emoji: string }).avatar_emoji}</span>
-            <span className="text-xs text-mc-text-secondary truncate">{agentName}</span>
+            <span className="text-xs text-mc-text-secondary truncate">
+              {agentName}
+            </span>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-mc-border/20">
-          <span className={`text-xs px-2 py-0.5 rounded ${PRIORITY_BADGE[task.priority]}`}>
-            {PRIORITY_LABELS[task.priority]}
-          </span>
+        {/* Footer: timestamp */}
+        <div className="flex items-center justify-end pt-2 border-t border-mc-border/20">
           <span className="text-[10px] text-mc-text-secondary/60">
-            {formatDistanceToNow(new Date(task.created_at), { addSuffix: true, locale: ko })}
+            {formatDistanceToNow(new Date(task.created_at), { addSuffix: true })}
           </span>
         </div>
       </div>

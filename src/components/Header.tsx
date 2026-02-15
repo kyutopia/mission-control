@@ -23,7 +23,6 @@ export function Header({ workspace }: HeaderProps) {
     return () => clearInterval(timer);
   }, []);
 
-  // Load active sub-agent count
   useEffect(() => {
     const loadSubAgentCount = async () => {
       try {
@@ -36,10 +35,7 @@ export function Header({ workspace }: HeaderProps) {
         console.error('Failed to load sub-agent count:', error);
       }
     };
-
     loadSubAgentCount();
-
-    // Poll every 10 seconds
     const interval = setInterval(loadSubAgentCount, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -50,22 +46,17 @@ export function Header({ workspace }: HeaderProps) {
 
   return (
     <header className="h-14 bg-mc-bg-secondary border-b border-mc-border flex items-center justify-between px-4">
-      {/* Left: Logo & Title */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-mc-accent-cyan" />
+          <Zap className="w-5 h-5 text-mc-accent" />
           <span className="font-semibold text-mc-text uppercase tracking-wider text-sm">
-            Mission Control
+            KYUTOPIA Mission Control
           </span>
         </div>
 
-        {/* Workspace indicator or back to dashboard */}
         {workspace ? (
           <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="flex items-center gap-1 text-mc-text-secondary hover:text-mc-accent transition-colors"
-            >
+            <Link href="/" className="flex items-center gap-1 text-mc-text-secondary hover:text-mc-accent transition-colors">
               <ChevronLeft className="w-4 h-4" />
               <LayoutGrid className="w-4 h-4" />
             </Link>
@@ -76,54 +67,43 @@ export function Header({ workspace }: HeaderProps) {
             </div>
           </div>
         ) : (
-          <Link
-            href="/"
-            className="flex items-center gap-2 px-3 py-1 bg-mc-bg-tertiary rounded hover:bg-mc-bg transition-colors"
-          >
+          <Link href="/" className="flex items-center gap-2 px-3 py-1 bg-mc-bg-tertiary rounded hover:bg-mc-bg transition-colors">
             <LayoutGrid className="w-4 h-4" />
-            <span className="text-sm">All Workspaces</span>
+            <span className="text-sm">대시보드</span>
           </Link>
         )}
       </div>
 
-      {/* Center: Stats - only show in workspace view */}
       {workspace && (
         <div className="flex items-center gap-8">
           <div className="text-center">
-            <div className="text-2xl font-bold text-mc-accent-cyan">{activeAgents}</div>
-            <div className="text-xs text-mc-text-secondary uppercase">Agents Active</div>
+            <div className="text-2xl font-bold text-mc-accent">{activeAgents}</div>
+            <div className="text-xs text-mc-text-secondary uppercase">에이전트</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-mc-accent-purple">{tasksInQueue}</div>
-            <div className="text-xs text-mc-text-secondary uppercase">Tasks in Queue</div>
+            <div className="text-xs text-mc-text-secondary uppercase">태스크</div>
           </div>
         </div>
       )}
 
-      {/* Right: Time & Status */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <Link href="/blog" className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary hover:text-mc-accent transition-colors" title="블로그 트래커">
+          <span className="text-lg">📝</span>
+        </Link>
+        <Link href="/revenue" className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary hover:text-mc-accent transition-colors" title="매출 대시보드">
+          <span className="text-lg">💰</span>
+        </Link>
         <span className="text-mc-text-secondary text-sm font-mono">
           {format(currentTime, 'HH:mm:ss')}
         </span>
-        <div
-          className={`flex items-center gap-2 px-3 py-1 rounded border text-sm font-medium ${
-            isOnline
-              ? 'bg-mc-accent-green/20 border-mc-accent-green text-mc-accent-green'
-              : 'bg-mc-accent-red/20 border-mc-accent-red text-mc-accent-red'
-          }`}
-        >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isOnline ? 'bg-mc-accent-green animate-pulse' : 'bg-mc-accent-red'
-            }`}
-          />
-          {isOnline ? 'ONLINE' : 'OFFLINE'}
+        <div className={`flex items-center gap-2 px-3 py-1 rounded border text-sm font-medium ${
+          isOnline ? 'bg-mc-accent-green/20 border-mc-accent-green text-mc-accent-green' : 'bg-mc-accent-red/20 border-mc-accent-red text-mc-accent-red'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-mc-accent-green animate-pulse' : 'bg-mc-accent-red'}`} />
+          {isOnline ? '연결됨' : '오프라인'}
         </div>
-        <button
-          onClick={() => router.push('/settings')}
-          className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary"
-          title="Settings"
-        >
+        <button onClick={() => router.push('/settings')} className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary" title="설정">
           <Settings className="w-5 h-5" />
         </button>
       </div>
