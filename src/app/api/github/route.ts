@@ -119,5 +119,66 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(issues);
   }
 
+
+  if (type === 'pipeline') {
+    // Fetch pipeline folder structure from GitHub
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`,
+      {
+        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` },
+        next: { revalidate: 300 },
+      }
+    );
+    const dirs = await res.json();
+    if (!Array.isArray(dirs)) return NextResponse.json([]);
+
+    const items = await Promise.all(
+      dirs.filter((d: any) => d.type === 'dir').map(async (dir: any) => {
+        const filesRes = await fetch(
+          `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline/${dir.name}`,
+          {
+            headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` },
+            next: { revalidate: 300 },
+          }
+        );
+        const files = await filesRes.json();
+        const reports = (Array.isArray(files) ? files : [])
+          .filter((f: any) => f.name.endsWith('.md'))
+          .map((f: any) => {
+            const fn = f.name.toLowerCase();
+            let stage = 'brainstorm';
+            if (fn.includes('trend') || fn.includes('stage2')) stage = 'trend';
+            else if (fn.includes('research') || fn.includes('debate') || fn.includes('discussion') || fn.includes('stage3')) stage = 'research';
+            else if (fn.includes('strategy') || fn.includes('roadmap') || fn.includes('stage4')) stage = 'strategy';
+            else if (fn.includes('bizplan') || fn.includes('pitch') || fn.includes('stage5') || fn.includes('execution') || fn.includes('curriculum') || fn.includes('plan')) stage = 'bizdev';
+            else if (fn.includes('brainstorm') || fn.includes('stage1')) stage = 'brainstorm';
+            return {
+              name: f.name,
+              url: f.html_url,
+              stage,
+            };
+          });
+
+        const stageOrder: Record<string, number> = { brainstorm: 1, trend: 2, research: 3, strategy: 4, bizdev: 5 };
+        let latestStage = 0;
+        for (const r of reports) {
+          const n = stageOrder[r.stage] || 0;
+          if (n > latestStage) latestStage = n;
+        }
+
+        // Extract number and name from folder
+        const match = dir.name.match(/^(\d+)-(.+)$/);
+        return {
+          id: match ? match[1] : '00',
+          name: match ? match[2].replace(/-/g, ' ') : dir.name,
+          reports,
+          latestStage,
+        };
+      })
+    );
+
+    return NextResponse.json(items.sort((a: any, b: any) => a.id.localeCompare(b.id)));
+  }
+
   return NextResponse.json({ error: 'Unknown type' }, { status: 400 });
 }

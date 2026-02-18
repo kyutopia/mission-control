@@ -1,148 +1,155 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Plus, GripVertical, DollarSign } from "lucide-react";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface PipelineItem {
   id: string;
   name: string;
   stage: string;
-  owner: string;
-  expected_revenue: number;
-  actual_revenue: number;
-  notes: string;
-  priority: string;
-  created_at: string;
+  reports: { name: string; url: string; stage: string }[];
+  latestStage: number;
 }
 
 const STAGES = [
-  { key: "discovery", label: "🔍 Discovery", color: "border-blue-500/50 bg-blue-500/10" },
-  { key: "analysis", label: "📊 Analysis", color: "border-yellow-500/50 bg-yellow-500/10" },
-  { key: "execution", label: "⚡ Execution", color: "border-green-500/50 bg-green-500/10" },
-  { key: "done", label: "✅ Done", color: "border-mc-accent-green/50 bg-mc-accent-green/10" },
+  { key: 'brainstorm', num: 1, label: '💡 브레인스토밍', desc: '아이디어 발굴', color: 'border-purple-500/50 bg-purple-500/10', accent: 'text-purple-400' },
+  { key: 'trend', num: 2, label: '📊 트렌드 모니터링', desc: '시장 분석, Go/No-Go', color: 'border-blue-500/50 bg-blue-500/10', accent: 'text-blue-400' },
+  { key: 'research', num: 3, label: '🔍 리서치/토론', desc: '심층 분석, 수익성', color: 'border-amber-500/50 bg-amber-500/10', accent: 'text-amber-400' },
+  { key: 'strategy', num: 4, label: '📋 전략 수립', desc: '실행 계획 수립', color: 'border-orange-500/50 bg-orange-500/10', accent: 'text-orange-400' },
+  { key: 'bizdev', num: 5, label: '🚀 사업개발', desc: '실행 + 액션 아이템', color: 'border-green-500/50 bg-green-500/10', accent: 'text-green-400' },
 ];
 
-const priorityBadge: Record<string, string> = {
-  urgent: "bg-red-500/20 text-red-400 border-red-500/30",
-  high: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  normal: "bg-mc-bg-tertiary text-mc-text-secondary border-mc-border",
-  low: "bg-mc-bg-secondary text-mc-text-secondary/60 border-mc-border/50",
-};
+function classifyReport(filename: string): string {
+  const f = filename.toLowerCase();
+  if (f.includes('brainstorm')) return 'brainstorm';
+  if (f.includes('trend') || f.includes('stage2')) return 'trend';
+  if (f.includes('research') || f.includes('debate') || f.includes('discussion') || f.includes('stage3')) return 'research';
+  if (f.includes('strategy') || f.includes('roadmap') || f.includes('stage4')) return 'strategy';
+  if (f.includes('bizplan') || f.includes('pitch') || f.includes('stage5') || f.includes('execution') || f.includes('curriculum') || f.includes('plan')) return 'bizdev';
+  return 'brainstorm';
+}
+
+function getLatestStage(reports: { stage: string }[]): number {
+  const stageOrder: Record<string, number> = { brainstorm: 1, trend: 2, research: 3, strategy: 4, bizdev: 5 };
+  let max = 0;
+  for (const r of reports) {
+    const n = stageOrder[r.stage] || 0;
+    if (n > max) max = n;
+  }
+  return max;
+}
 
 export default function PipelinePage() {
   const [items, setItems] = useState<PipelineItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newItem, setNewItem] = useState({ name: "", stage: "discovery", owner: "", expected_revenue: 0, notes: "", priority: "normal" });
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/pipeline")
-      .then((r) => r.json())
-      .then((data) => { setItems(data); setLoading(false); })
+    fetch('/api/github?type=pipeline')
+      .then(r => r.json())
+      .then(data => { setItems(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
-  const addItem = async () => {
-    if (!newItem.name) return;
-    const res = await fetch("/api/pipeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newItem),
-    });
-    if (res.ok) {
-      const item = await res.json();
-      setItems([...items, item]);
-      setNewItem({ name: "", stage: "discovery", owner: "", expected_revenue: 0, notes: "", priority: "normal" });
-      setShowAdd(false);
-    }
-  };
-
-  const moveStage = async (id: string, newStage: string) => {
-    await fetch(`/api/pipeline/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage: newStage }),
-    });
-    setItems(items.map((i) => (i.id === id ? { ...i, stage: newStage } : i)));
-  };
-
-  const deleteItem = async (id: string) => {
-    await fetch(`/api/pipeline/${id}`, { method: "DELETE" });
-    setItems(items.filter((i) => i.id !== id));
-  };
-
-  const stageItems = (stage: string) => items.filter((i) => i.stage === stage);
-  const stageRevenue = (stage: string) => stageItems(stage).reduce((s, i) => s + (i.expected_revenue || 0), 0);
-
-  if (loading) return <div className="min-h-screen bg-mc-bg text-mc-text flex items-center justify-center">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-mc-bg flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-4 animate-pulse">🚀</div>
+        <p className="text-mc-text-secondary">파이프라인 로딩중...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-mc-bg text-mc-text p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-mc-text-secondary hover:text-mc-text"><ChevronLeft size={20} /></Link>
-            <h1 className="text-2xl font-bold">🚀 Pipeline</h1>
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/" className="text-mc-text-secondary hover:text-mc-text text-sm transition-colors">← 대시보드</Link>
           </div>
-          <button onClick={() => setShowAdd(!showAdd)} className="px-4 py-2 bg-mc-accent text-white rounded-lg hover:bg-mc-accent/80 flex items-center gap-2">
-            <Plus size={16} /> Add Item
-          </button>
+          <h1 className="text-2xl font-bold">🚀 사업 파이프라인</h1>
+          <p className="text-mc-text-secondary text-sm mt-1">KYUTOPIA 5단계 파이프라인 — {items.length}개 아이템</p>
         </div>
 
-        {showAdd && (
-          <div className="bg-mc-bg-secondary border border-mc-border rounded-xl p-4 mb-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <input placeholder="Item name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} className="bg-mc-bg border border-mc-border rounded-lg px-3 py-2 text-mc-text" />
-              <select value={newItem.stage} onChange={(e) => setNewItem({ ...newItem, stage: e.target.value })} className="bg-mc-bg border border-mc-border rounded-lg px-3 py-2 text-mc-text">
-                {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-              <input placeholder="Owner" value={newItem.owner} onChange={(e) => setNewItem({ ...newItem, owner: e.target.value })} className="bg-mc-bg border border-mc-border rounded-lg px-3 py-2 text-mc-text" />
-              <input type="number" placeholder="Expected Revenue" value={newItem.expected_revenue || ""} onChange={(e) => setNewItem({ ...newItem, expected_revenue: parseFloat(e.target.value) || 0 })} className="bg-mc-bg border border-mc-border rounded-lg px-3 py-2 text-mc-text" />
-              <input placeholder="Notes" value={newItem.notes} onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })} className="bg-mc-bg border border-mc-border rounded-lg px-3 py-2 text-mc-text col-span-2" />
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button onClick={addItem} className="px-4 py-2 bg-mc-accent-green text-white rounded-lg hover:bg-mc-accent-green/80">Create</button>
-              <button onClick={() => setShowAdd(false)} className="px-4 py-2 bg-mc-bg-tertiary text-mc-text-secondary rounded-lg hover:bg-mc-border">Cancel</button>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {STAGES.map((stage) => (
-            <div key={stage.key} className={`border rounded-lg p-4 ${stage.color}`}>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-sm">{stage.label}</h2>
-                <span className="text-xs text-mc-text-secondary">{stageItems(stage.key).length}</span>
-              </div>
-              {stageRevenue(stage.key) > 0 && (
-                <div className="text-xs text-mc-text-secondary mb-2 flex items-center gap-1">
-                  <DollarSign size={12} /> ₩{stageRevenue(stage.key).toLocaleString()}
-                </div>
-              )}
-              <div className="space-y-2">
-                {stageItems(stage.key).map((item) => (
-                  <div key={item.id} className="bg-mc-bg-secondary border border-mc-border rounded-xl p-3">
-                    <div className="flex items-start justify-between">
-                      <span className="font-medium text-sm">{item.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${priorityBadge[item.priority]}`}>{item.priority}</span>
-                    </div>
-                    {item.owner && <p className="text-xs text-mc-text-secondary mt-1">👤 {item.owner}</p>}
-                    {item.expected_revenue > 0 && <p className="text-xs text-mc-accent-green mt-1">₩{item.expected_revenue.toLocaleString()}</p>}
-                    {item.notes && <p className="text-xs text-mc-text-secondary mt-1 line-clamp-2">{item.notes}</p>}
-                    <div className="flex gap-1 mt-2">
-                      {STAGES.filter((s) => s.key !== stage.key).map((s) => (
-                        <button key={s.key} onClick={() => moveStage(item.id, s.key)} className="text-[10px] px-1.5 py-0.5 bg-mc-bg-tertiary rounded hover:bg-mc-border text-mc-text-secondary">
-                          → {s.label.split(" ")[0]}
-                        </button>
-                      ))}
-                      <button onClick={() => deleteItem(item.id)} className="text-[10px] px-1.5 py-0.5 bg-red-500/20 rounded hover:bg-red-500/30 text-red-400 ml-auto">✕</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* Stage Legend */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {STAGES.map(s => (
+            <div key={s.key} className={`text-xs px-3 py-1.5 rounded-lg border ${s.color}`}>
+              {s.label}
             </div>
           ))}
+        </div>
+
+        {/* Pipeline Items */}
+        <div className="space-y-3">
+          {items.map(item => {
+            const isOpen = selectedItem === item.id;
+            return (
+              <div key={item.id} className="bg-mc-bg-secondary rounded-xl border border-mc-border overflow-hidden">
+                {/* Item Header */}
+                <button
+                  onClick={() => setSelectedItem(isOpen ? null : item.id)}
+                  className="w-full px-5 py-4 flex items-center gap-4 hover:bg-mc-bg-tertiary/30 transition-colors text-left"
+                >
+                  <span className="text-lg font-bold text-mc-text-secondary/50 w-8">{item.id}</span>
+                  <div className="flex-1">
+                    <div className="font-semibold">{item.name}</div>
+                    <div className="text-xs text-mc-text-secondary mt-0.5">{item.reports.length}개 보고서</div>
+                  </div>
+                  {/* Stage Progress */}
+                  <div className="flex gap-1">
+                    {STAGES.map(s => (
+                      <div
+                        key={s.key}
+                        className={`w-8 h-2 rounded-full ${
+                          s.num <= item.latestStage ? 'bg-mc-accent-green' : 'bg-mc-bg-tertiary'
+                        }`}
+                        title={s.label}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-mc-text-secondary text-sm">{isOpen ? '▲' : '▼'}</span>
+                </button>
+
+                {/* Expanded: Reports by Stage */}
+                {isOpen && (
+                  <div className="px-5 pb-4 border-t border-mc-border">
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 mt-4">
+                      {STAGES.map(stage => {
+                        const stageReports = item.reports.filter(r => r.stage === stage.key);
+                        return (
+                          <div key={stage.key} className={`rounded-lg border p-3 ${stage.color}`}>
+                            <div className={`text-xs font-semibold mb-2 ${stage.accent}`}>
+                              Stage {stage.num}: {stage.label.slice(2)}
+                            </div>
+                            {stageReports.length > 0 ? (
+                              <div className="space-y-1">
+                                {stageReports.map(r => (
+                                  <a
+                                    key={r.name}
+                                    href={r.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-[11px] text-mc-text-secondary hover:text-mc-accent truncate transition-colors"
+                                    title={r.name}
+                                  >
+                                    📄 {r.name.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '')}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-mc-text-secondary/30">—</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
