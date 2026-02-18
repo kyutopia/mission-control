@@ -14,6 +14,7 @@ interface DashboardData {
 export default function CEODashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [liveEvents, setLiveEvents] = useState<{id:string;type:string;message:string;created_at:string;task_title?:string}[]>([]);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -80,6 +81,26 @@ export default function CEODashboard() {
       }
     }
     loadDashboard();
+  }, []);
+
+  // SSE real-time events
+  useEffect(() => {
+    const es = new EventSource("/api/events/github");
+    es.onmessage = (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        const mapped = {
+          id: "live-" + evt.id,
+          type: evt.type === "push" ? "push" : evt.type === "issues" ? (evt.action === "closed" ? "task_completed" : evt.action === "opened" ? "task_created" : "task_status_changed") : evt.type,
+          message: evt.payload?.title || evt.payload?.commits?.[0]?.message || evt.type + "." + evt.action,
+          created_at: evt.receivedAt,
+          task_title: evt.payload?.title || evt.payload?.commits?.[0]?.message,
+        };
+        setLiveEvents(prev => [mapped, ...prev].slice(0, 20));
+      } catch {}
+    };
+    es.onerror = () => { setTimeout(() => es.close(), 5000); };
+    return () => es.close();
   }, []);
 
   if (loading) {
@@ -194,7 +215,7 @@ export default function CEODashboard() {
           <div className="bg-mc-bg-secondary rounded-xl border border-mc-border p-5">
             <h2 className="font-semibold mb-4">⚡ 최근 활동</h2>
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {data.recentActivity.map(event => (
+              {[...liveEvents, ...data.recentActivity].slice(0, 15).map(event => (
                 <div key={event.id} className="text-sm py-2 border-b border-mc-border/30 last:border-0">
                   <div className="text-mc-text">
                     {event.type === 'task_created' && event.task_title
@@ -210,7 +231,7 @@ export default function CEODashboard() {
                   </div>
                 </div>
               ))}
-              {data.recentActivity.length === 0 && <p className="text-sm text-mc-text-secondary">활동 없음</p>}
+              {data.recentActivity.length === 0 && liveEvents.length === 0 && <p className="text-sm text-mc-text-secondary">활동 없음</p>}
             </div>
           </div>
         </div>
