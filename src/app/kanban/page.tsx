@@ -40,6 +40,47 @@ const ASSIGNEE_EMOJI: Record<string, string> = {
   '🦁 도윤': '🦁', '🐉 건우': '🐉', '🐺 솔희': '🐺', '🐴 동규': '🐴',
 };
 
+const GH_LOGIN_MAP: Record<string, { emoji: string; name: string }> = {
+  'doyun-kyu': { emoji: '🦁', name: '도윤' },
+  'gunwoo-kyu': { emoji: '🐉', name: '건우' },
+  'solhee-kyu': { emoji: '🐺', name: '솔희' },
+  'kyutopia_dk': { emoji: '🐴', name: '동규' },
+  'lidoky': { emoji: '🐴', name: '동규' },
+};
+
+function getAssigneeDisplay(card: BoardCard): { emoji: string; name: string } | null {
+  // First try project field
+  if (card.assignee) {
+    const e = ASSIGNEE_EMOJI[card.assignee] || '👤';
+    return { emoji: e, name: card.assignee.replace(/^[^\s]+\s/, '') };
+  }
+  // Fall back to GitHub assignees
+  if (card.assignees && card.assignees.length > 0) {
+    const login = card.assignees[0].login;
+    const mapped = GH_LOGIN_MAP[login];
+    return mapped || { emoji: '👤', name: login };
+  }
+  return null;
+}
+
+const PRIORITY_ORDER: Record<string, number> = {
+  '🔴 긴급': 0, '🟡 보통': 1, '🟢 여유': 2,
+};
+
+function sortCards(cards: BoardCard[], isDone: boolean): BoardCard[] {
+  return [...cards].sort((a, b) => {
+    if (isDone) {
+      // Done: most recently updated first
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    }
+    // Todo/In Progress: priority → date
+    const pa = PRIORITY_ORDER[a.priority] ?? 3;
+    const pb = PRIORITY_ORDER[b.priority] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+}
+
 // Filter out labels already shown as separate fields (date, assignee, status, priority)
 const HIDDEN_LABEL_PREFIXES = ['📅', '👑', '🦊', '🐺', '🐉', '🦁', '✅', '⏳', '🔴', '🟡', '🟢'];
 function filterDisplayLabels(labels: { name: string; color: string }[]) {
@@ -77,7 +118,14 @@ export default function KanbanBoard() {
   const assignees = useMemo(() => {
     if (!board) return [];
     const set = new Set<string>();
-    Object.values(board.columns).flat().forEach(c => { if (c.assignee) set.add(c.assignee); });
+    Object.values(board.columns).flat().forEach(c => {
+      if (c.assignee) set.add(c.assignee.replace(/^[^\s]+\s/, ''));
+      if (c.assignees?.[0]?.login) {
+        const m = GH_LOGIN_MAP[c.assignees[0].login];
+        if (m) set.add(m.name);
+        else set.add(c.assignees[0].login);
+      }
+    });
     return Array.from(set);
   }, [board]);
 
@@ -86,7 +134,12 @@ export default function KanbanBoard() {
     const filtered: Record<string, BoardCard[]> = {};
     for (const [col, cards] of Object.entries(board.columns)) {
       filtered[col] = cards.filter(c => {
-        if (filterAssignee !== 'all' && c.assignee !== filterAssignee) return false;
+        if (filterAssignee !== 'all') {
+          const ghLogin = c.assignees?.[0]?.login;
+          const mapped = ghLogin ? (GH_LOGIN_MAP[ghLogin]?.name || ghLogin) : '';
+          const projectAssignee = c.assignee?.replace(/^[^\s]+\s/, '') || '';
+          if (projectAssignee !== filterAssignee && mapped !== filterAssignee) return false;
+        }
         if (filterPriority !== 'all' && c.priority !== filterPriority) return false;
         return true;
       });
@@ -156,7 +209,7 @@ export default function KanbanBoard() {
         <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
           {columnOrder.map(col => {
             const config = COLUMN_CONFIG[col] || COLUMN_CONFIG['Todo'];
-            const cards = filteredBoard[col] || [];
+            const cards = sortCards(filteredBoard[col] || [], col === "Done");
             return (
               <div key={col} className={`flex-1 min-w-[300px] bg-mc-bg-secondary rounded-xl border border-mc-border overflow-hidden border-t-[3px] ${config.accent}`}>
                 {/* Column Header */}
@@ -175,7 +228,7 @@ export default function KanbanBoard() {
                   {cards.map(card => {
                     const pri = PRIORITY_MAP[card.priority];
                     const isHovered = hoveredCard === card.id;
-                    const emoji = ASSIGNEE_EMOJI[card.assignee] || '👤';
+                    const assigneeInfo = getAssigneeDisplay(card);
                     const displayLabels = filterDisplayLabels(card.labels);
                     const dateLabel = getDateLabel(card.labels);
 
@@ -219,9 +272,9 @@ export default function KanbanBoard() {
                         {/* Footer */}
                         <div className="flex items-center justify-between text-[11px]">
                           <div className="flex items-center gap-1.5">
-                            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${card.assignee ? 'bg-mc-bg-tertiary/50 text-mc-text-secondary' : 'bg-mc-bg-tertiary/30 text-mc-text-secondary/50'}`}>
-                              <span>{emoji}</span>
-                              <span>{card.assignee ? card.assignee.replace(/^[^\s]+\s/, '') : '미지정'}</span>
+                            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${assigneeInfo ? 'bg-mc-bg-tertiary/50 text-mc-text-secondary' : 'bg-mc-bg-tertiary/30 text-mc-text-secondary/50'}`}>
+                              <span>{assigneeInfo ? assigneeInfo.emoji : '👤'}</span>
+                              <span>{assigneeInfo ? assigneeInfo.name : '미지정'}</span>
                             </span>
                             {pri && (
                               <span className="px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: pri.color + '20', color: pri.color }}>
