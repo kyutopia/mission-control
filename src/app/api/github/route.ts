@@ -142,36 +142,51 @@ export async function GET(request: NextRequest) {
           }
         );
         const files = await filesRes.json();
-        const reports = (Array.isArray(files) ? files : [])
-          .filter((f: any) => f.name.endsWith('.md'))
+        const allFiles = Array.isArray(files) ? files : [];
+
+        // Classify reports into 6 stages
+        const reports = allFiles
+          .filter((f: any) => f.name.endsWith('.md') && !f.name.startsWith('gate-') && f.name !== 'lessons-learned.md')
           .map((f: any) => {
             const fn = f.name.toLowerCase();
             let stage = 'brainstorm';
-            if (fn.includes('trend') || fn.includes('stage2')) stage = 'trend';
+            if (fn.includes('revenue') || fn.includes('scale') || fn.includes('stage6')) stage = 'scaleup';
+            else if (fn.includes('pitch') || fn.includes('mvp') || fn.includes('stage5') || fn.includes('execution') || fn.includes('curriculum')) stage = 'mvp';
+            else if (fn.includes('strategy') || fn.includes('roadmap') || fn.includes('bizplan') || fn.includes('stage4')) stage = 'strategy';
             else if (fn.includes('research') || fn.includes('debate') || fn.includes('discussion') || fn.includes('stage3')) stage = 'research';
-            else if (fn.includes('strategy') || fn.includes('roadmap') || fn.includes('stage4')) stage = 'strategy';
-            else if (fn.includes('bizplan') || fn.includes('pitch') || fn.includes('stage5') || fn.includes('execution') || fn.includes('curriculum') || fn.includes('plan')) stage = 'bizdev';
+            else if (fn.includes('trend') || fn.includes('stage2')) stage = 'trend';
             else if (fn.includes('brainstorm') || fn.includes('stage1')) stage = 'brainstorm';
-            return {
-              name: f.name,
-              url: f.html_url,
-              stage,
-            };
+            // Default remains brainstorm for unmatched
+            return { name: f.name, url: f.html_url, stage };
           });
 
-        const stageOrder: Record<string, number> = { brainstorm: 1, trend: 2, research: 3, strategy: 4, bizdev: 5 };
+        // Parse gate decision files
+        const gateFiles = allFiles.filter((f: any) => /^gate-\d+-decision\.md$/i.test(f.name));
+        const gates: { gate: number; status: string; file: string; url: string }[] = [];
+        for (let g = 1; g <= 5; g++) {
+          const gf = gateFiles.find((f: any) => f.name.toLowerCase() === `gate-${g}-decision.md`);
+          if (gf) {
+            // Try to detect status from filename or content header (for now, mark as 'go' if file exists)
+            // To detect pivot/kill, we'd need to fetch content — too expensive. Default: go.
+            gates.push({ gate: g, status: 'go', file: gf.name, url: gf.html_url });
+          } else {
+            gates.push({ gate: g, status: 'pending', file: '', url: '' });
+          }
+        }
+
+        const stageOrder: Record<string, number> = { brainstorm: 1, trend: 2, research: 3, strategy: 4, mvp: 5, scaleup: 6 };
         let latestStage = 0;
         for (const r of reports) {
           const n = stageOrder[r.stage] || 0;
           if (n > latestStage) latestStage = n;
         }
 
-        // Extract number and name from folder
         const match = dir.name.match(/^(\d+)-(.+)$/);
         return {
           id: match ? match[1] : '00',
           name: match ? match[2].replace(/-/g, ' ') : dir.name,
           reports,
+          gates,
           latestStage,
         };
       })
