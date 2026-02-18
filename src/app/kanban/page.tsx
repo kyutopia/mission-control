@@ -283,7 +283,7 @@ export default function KanbanBoard() {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {dateLabel && <span className="text-mc-text-secondary">📅 {dateLabel}</span>}
+                            {dateLabel ? <span className="text-mc-text-secondary">📅 {dateLabel}</span> : <span className="text-mc-text-secondary/40">📅 미설정</span>}
                             <span className="text-mc-text-secondary/50 font-mono">#{card.number}</span>
                           </div>
                         </div>
