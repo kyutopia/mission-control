@@ -9,6 +9,7 @@ const menuItems = [
   { emoji: '📝', label: '블로그', href: '/blog' },
   { emoji: '💰', label: '매출', href: '/revenue' },
   { emoji: '🚀', label: '파이프라인', href: '/pipeline' },
+  { emoji: '🔀', label: 'PR', href: '/pulls' },
   { emoji: '👥', label: '팀', href: '/team' },
   { emoji: '📋', label: '보고서', href: '/reports' },
   { emoji: '⚙️', label: '설정', href: '/settings' },

@@ -120,6 +120,73 @@ export async function GET(request: NextRequest) {
   }
 
 
+  if (type === "pulls") {
+    // Fetch open + recently closed PRs from all org repos
+    const { data } = await githubGraphQL(`
+      query {
+        organization(login: "${GITHUB_ORG}") {
+          repositories(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
+            nodes {
+              name
+              pullRequests(first: 20, states: [OPEN, MERGED, CLOSED], orderBy: {field: UPDATED_AT, direction: DESC}) {
+                nodes {
+                  number
+                  title
+                  state
+                  isDraft
+                  createdAt
+                  updatedAt
+                  mergedAt
+                  closedAt
+                  url
+                  additions
+                  deletions
+                  changedFiles
+                  author { login avatarUrl }
+                  labels(first: 5) { nodes { name color } }
+                  reviewDecision
+                  reviews(first: 5) { nodes { author { login } state } }
+                  headRefName
+                  baseRefName
+                }
+              }
+            }
+          }
+        }
+      }
+    `);
+
+    const pulls: any[] = [];
+    const repos = data?.organization?.repositories?.nodes || [];
+    for (const repo of repos) {
+      for (const pr of (repo.pullRequests?.nodes || [])) {
+        pulls.push({
+          repo: repo.name,
+          number: pr.number,
+          title: pr.title,
+          state: pr.state,
+          isDraft: pr.isDraft,
+          createdAt: pr.createdAt,
+          updatedAt: pr.updatedAt,
+          mergedAt: pr.mergedAt,
+          url: pr.url,
+          additions: pr.additions,
+          deletions: pr.deletions,
+          changedFiles: pr.changedFiles,
+          author: pr.author?.login || "unknown",
+          authorAvatar: pr.author?.avatarUrl || "",
+          labels: (pr.labels?.nodes || []).map((l: any) => ({ name: l.name, color: l.color })),
+          reviewDecision: pr.reviewDecision,
+          reviews: (pr.reviews?.nodes || []).map((r: any) => ({ author: r.author?.login, state: r.state })),
+          branch: pr.headRefName,
+          baseBranch: pr.baseRefName,
+        });
+      }
+    }
+
+    return NextResponse.json(pulls.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+  }
+
   if (type === 'pipeline') {
     // Fetch pipeline folder structure from GitHub
     const res = await fetch(
