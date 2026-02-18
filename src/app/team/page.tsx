@@ -1,127 +1,195 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Activity, CheckCircle, Clock } from "lucide-react";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
-interface Agent {
-  id: string;
+interface TeamMember {
+  login: string;
+  emoji: string;
   name: string;
   role: string;
-  description: string;
-  avatar_emoji: string;
-  status: string;
-  is_master: number;
-  active_tasks: number;
-  completed_tasks: number;
-  last_activity: string;
-  last_activity_at: string;
+  title: string;
+  stats: { todo: number; inProgress: number; done: number; total: number };
+  recentIssues: { number: number; title: string; state: string; priority: string; url: string }[];
 }
 
-const statusColors: Record<string, string> = {
-  working: "bg-mc-accent-green/20 text-mc-accent-green border-mc-accent-green/30",
-  standby: "bg-mc-accent-yellow/20 text-mc-accent-yellow border-mc-accent-yellow/30",
-  offline: "bg-mc-bg-tertiary text-mc-text-secondary border-mc-border",
+const TEAM_MAP: Record<string, { emoji: string; name: string; role: string; title: string }> = {
+  'doyun-kyu':  { emoji: '🦁', name: '도윤', role: 'CTO', title: '기술이사 — 개발/배포/운영' },
+  'gunwoo-kyu': { emoji: '🐉', name: '건우', role: 'COO', title: '운영이사 — 일정관리/조율' },
+  'solhee-kyu': { emoji: '🐺', name: '솔희', role: 'CSO', title: '전략이사 — 기획/전략/분석' },
 };
 
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return "N/A";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
 export default function TeamPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totals, setTotals] = useState({ todo: 0, ip: 0, done: 0, total: 0 });
 
   useEffect(() => {
-    fetch("/api/team")
-      .then((r) => r.json())
-      .then((data) => { setAgents(data); setLoading(false); })
+    fetch('/api/github?type=board')
+      .then(r => r.json())
+      .then(board => {
+        const memberStats: Record<string, TeamMember> = {};
+
+        // Initialize known members
+        for (const [login, info] of Object.entries(TEAM_MAP)) {
+          memberStats[login] = {
+            login, ...info,
+            stats: { todo: 0, inProgress: 0, done: 0, total: 0 },
+            recentIssues: [],
+          };
+        }
+
+        let tTodo = 0, tIp = 0, tDone = 0;
+
+        for (const [col, cards] of Object.entries(board.columns as Record<string, any[]>)) {
+          for (const card of cards) {
+            const login = card.assignees?.[0]?.login || '';
+            if (login && memberStats[login]) {
+              memberStats[login].stats.total++;
+              if (col === 'Todo') { memberStats[login].stats.todo++; tTodo++; }
+              else if (col === 'In Progress') { memberStats[login].stats.inProgress++; tIp++; }
+              else if (col === 'Done') { memberStats[login].stats.done++; tDone++; }
+
+              if (col !== 'Done' && memberStats[login].recentIssues.length < 5) {
+                memberStats[login].recentIssues.push({
+                  number: card.number,
+                  title: card.title,
+                  state: col,
+                  priority: card.priority || '',
+                  url: card.url,
+                });
+              }
+            } else {
+              if (col === 'Todo') tTodo++;
+              else if (col === 'In Progress') tIp++;
+              else if (col === 'Done') tDone++;
+            }
+          }
+        }
+
+        setTotals({ todo: tTodo, ip: tIp, done: tDone, total: board.totalItems });
+        setMembers(Object.values(memberStats));
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="min-h-screen bg-mc-bg text-mc-text flex items-center justify-center">Loading...</div>;
-
-  const working = agents.filter((a) => a.status === "working").length;
-  const total = agents.length;
+  if (loading) return (
+    <div className="min-h-screen bg-mc-bg flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-4 animate-pulse">👥</div>
+        <p className="text-mc-text-secondary">팀 데이터 로딩중...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-mc-bg text-mc-text p-3 sm:p-4 lg:p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="text-mc-text-secondary hover:text-mc-text"><ChevronLeft size={20} /></Link>
-          <h1 className="text-2xl font-bold">👥 Team</h1>
-          <span className="text-sm text-mc-text-secondary ml-2">{working}/{total} active</span>
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/" className="text-mc-text-secondary hover:text-mc-text text-sm transition-colors">← 대시보드</Link>
+          </div>
+          <h1 className="text-2xl font-bold">👥 팀 현황</h1>
+          <p className="text-mc-text-secondary text-sm mt-1">GitHub Issues 기반 실시간 데이터</p>
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-xl p-5 bg-gradient-to-br from-green-600/20 to-green-800/10 border border-green-500/20">
-            <div className="text-mc-text-secondary text-xs mb-1">Active Agents</div>
-            <div className="text-2xl font-bold text-mc-accent-green">{working}</div>
-          </div>
+        {/* Summary KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="rounded-xl p-5 bg-gradient-to-br from-blue-600/20 to-blue-800/10 border border-blue-500/20">
-            <div className="text-mc-text-secondary text-xs mb-1">In-Progress Tasks</div>
-            <div className="text-2xl font-bold text-mc-accent">{agents.reduce((s, a) => s + (a.active_tasks || 0), 0)}</div>
+            <div className="text-3xl font-bold">{totals.total}</div>
+            <div className="text-sm text-mc-text-secondary mt-1">전체 이슈</div>
           </div>
           <div className="rounded-xl p-5 bg-gradient-to-br from-amber-600/20 to-amber-800/10 border border-amber-500/20">
-            <div className="text-mc-text-secondary text-xs mb-1">Completed Tasks</div>
-            <div className="text-2xl font-bold">{agents.reduce((s, a) => s + (a.completed_tasks || 0), 0)}</div>
+            <div className="text-3xl font-bold text-mc-accent-yellow">{totals.ip}</div>
+            <div className="text-sm text-mc-text-secondary mt-1">진행중</div>
+          </div>
+          <div className="rounded-xl p-5 bg-gradient-to-br from-slate-600/20 to-slate-800/10 border border-slate-500/20">
+            <div className="text-3xl font-bold">{totals.todo}</div>
+            <div className="text-sm text-mc-text-secondary mt-1">대기</div>
+          </div>
+          <div className="rounded-xl p-5 bg-gradient-to-br from-green-600/20 to-green-800/10 border border-green-500/20">
+            <div className="text-3xl font-bold text-mc-accent-green">{totals.done}</div>
+            <div className="text-sm text-mc-text-secondary mt-1">완료</div>
+            <div className="text-xs text-mc-text-secondary mt-1">
+              {totals.total > 0 ? Math.round(totals.done / totals.total * 100) : 0}% 완료율
+            </div>
           </div>
         </div>
 
-        {/* Agent cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {agents.map((agent) => (
-            <div key={agent.id} className="bg-mc-bg-secondary border border-mc-border rounded-xl p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{agent.avatar_emoji}</span>
-                  <div>
-                    <div className="font-bold text-lg">{agent.name}</div>
-                    <div className="text-sm text-mc-text-secondary">{agent.role}</div>
+        {/* Team Member Cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {members.map(m => {
+            const rate = m.stats.total > 0 ? Math.round(m.stats.done / m.stats.total * 100) : 0;
+            return (
+              <div key={m.login} className="bg-mc-bg-secondary rounded-xl border border-mc-border overflow-hidden">
+                {/* Member Header */}
+                <div className="p-5 border-b border-mc-border">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-3xl">{m.emoji}</span>
+                    <div>
+                      <div className="font-bold text-lg">{m.name}</div>
+                      <div className="text-xs text-mc-accent">{m.role}</div>
+                    </div>
                   </div>
+                  <p className="text-xs text-mc-text-secondary">{m.title}</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full border ${statusColors[agent.status] || statusColors.offline}`}>
-                  {agent.status}
-                </span>
+
+                {/* Stats */}
+                <div className="p-5 border-b border-mc-border">
+                  <div className="grid grid-cols-4 gap-2 text-center mb-3">
+                    <div>
+                      <div className="text-lg font-bold">{m.stats.total}</div>
+                      <div className="text-[10px] text-mc-text-secondary">전체</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-mc-accent-yellow">{m.stats.inProgress}</div>
+                      <div className="text-[10px] text-mc-text-secondary">진행</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold">{m.stats.todo}</div>
+                      <div className="text-[10px] text-mc-text-secondary">대기</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-mc-accent-green">{m.stats.done}</div>
+                      <div className="text-[10px] text-mc-text-secondary">완료</div>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-mc-bg-tertiary rounded-full h-2">
+                    <div className="bg-mc-accent-green h-2 rounded-full transition-all" style={{ width: `${rate}%` }} />
+                  </div>
+                  <div className="text-right text-xs text-mc-text-secondary mt-1">{rate}% 완료율</div>
+                </div>
+
+                {/* Active Issues */}
+                <div className="p-5">
+                  <div className="text-xs font-semibold text-mc-text-secondary mb-2">📋 활성 이슈</div>
+                  {m.recentIssues.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {m.recentIssues.map(issue => (
+                        <a key={issue.number} href={issue.url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs p-1.5 rounded hover:bg-mc-bg-tertiary/50 transition-colors group">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            issue.state === 'In Progress' ? 'bg-mc-accent' : 'bg-mc-text-secondary/30'
+                          }`} />
+                          <span className="truncate group-hover:text-mc-accent transition-colors">
+                            #{issue.number} {issue.title}
+                          </span>
+                          {issue.priority && (
+                            <span className="text-[9px] flex-shrink-0">{issue.priority.slice(0, 2)}</span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-mc-text-secondary/50">활성 이슈 없음</p>
+                  )}
+                </div>
               </div>
-
-              {agent.description && (
-                <p className="text-sm text-mc-text-secondary mb-3 line-clamp-2">{agent.description}</p>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                <div className="text-center bg-mc-bg rounded p-2">
-                  <div className="flex items-center justify-center gap-1 text-mc-accent mb-1"><Activity size={12} /></div>
-                  <div className="text-sm font-semibold">{agent.active_tasks || 0}</div>
-                  <div className="text-[10px] text-mc-text-secondary">Active</div>
-                </div>
-                <div className="text-center bg-mc-bg rounded p-2">
-                  <div className="flex items-center justify-center gap-1 text-mc-accent-green mb-1"><CheckCircle size={12} /></div>
-                  <div className="text-sm font-semibold">{agent.completed_tasks || 0}</div>
-                  <div className="text-[10px] text-mc-text-secondary">Done</div>
-                </div>
-                <div className="text-center bg-mc-bg rounded p-2">
-                  <div className="flex items-center justify-center gap-1 text-mc-text-secondary mb-1"><Clock size={12} /></div>
-                  <div className="text-sm font-semibold">{timeAgo(agent.last_activity_at)}</div>
-                  <div className="text-[10px] text-mc-text-secondary">Last</div>
-                </div>
-              </div>
-
-              {agent.last_activity && (
-                <div className="text-xs text-mc-text-secondary bg-mc-bg rounded p-2 line-clamp-1">
-                  💬 {agent.last_activity}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
