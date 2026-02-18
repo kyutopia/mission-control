@@ -18,19 +18,22 @@ export default function CEODashboard() {
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const [agentsRes, tasksRes, eventsRes, blogRes, revenueRes] = await Promise.all([
+        const [agentsRes, boardRes, blogRes, revenueRes] = await Promise.all([
           fetch('/api/agents?workspace_id=default'),
-          fetch('/api/tasks?workspace_id=default'),
-          fetch('/api/events?workspace_id=default&limit=20'),
+          fetch('/api/github?type=board'),
           fetch('/api/blog'),
           fetch('/api/revenue'),
         ]);
 
         const agents = agentsRes.ok ? await agentsRes.json() : [];
-        const tasks = tasksRes.ok ? await tasksRes.json() : [];
-        const events = eventsRes.ok ? await eventsRes.json() : [];
+        const board = boardRes.ok ? await boardRes.json() : { columns: {}, totalItems: 0 };
         const blogs = blogRes.ok ? await blogRes.json() : [];
         const revenues = revenueRes.ok ? await revenueRes.json() : [];
+
+        // GitHub board columns to task stats
+        const todoCards = board.columns['Todo'] || [];
+        const inProgressCards = board.columns['In Progress'] || [];
+        const doneCards = board.columns['Done'] || [];
 
         const now = new Date();
         const thisMonthRevenues = revenues.filter((r: { date: string }) => {
@@ -38,22 +41,27 @@ export default function CEODashboard() {
           return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
 
-        // Enhance events with task titles
-        const taskMap = new Map(tasks.map((t: { id: string; title: string }) => [t.id, t.title]));
-        const enhancedEvents = events.map((e: { task_id?: string; type: string; message: string }) => ({
-          ...e,
-          task_title: e.task_id ? taskMap.get(e.task_id) : undefined,
+        // Build recent activity from GitHub issues (most recently updated)
+        const allCards = [...todoCards, ...inProgressCards, ...doneCards]
+          .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, 10);
+        const githubActivity = allCards.map((c: any) => ({
+          id: c.id,
+          type: c.state === 'CLOSED' ? 'task_completed' : 'task_created',
+          message: c.title,
+          created_at: c.updatedAt,
+          task_title: c.title,
         }));
 
         setData({
           agents: Array.isArray(agents) ? agents : [],
           taskStats: {
-            total: tasks.length,
-            done: tasks.filter((t: { status: string }) => t.status === 'done').length,
-            in_progress: tasks.filter((t: { status: string }) => t.status === 'in_progress').length,
-            inbox: tasks.filter((t: { status: string }) => t.status === 'inbox' || t.status === 'assigned').length,
+            total: board.totalItems || 0,
+            done: doneCards.length,
+            in_progress: inProgressCards.length,
+            inbox: todoCards.length,
           },
-          recentActivity: enhancedEvents.slice(0, 10),
+          recentActivity: githubActivity,
           blogStats: {
             total: blogs.length,
             published: blogs.filter((b: { status: string }) => b.status === 'published').length,
