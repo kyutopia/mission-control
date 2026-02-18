@@ -1,27 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { githubGraphQL, githubREST, cachedFetch, getCacheStats, GitHubError, GITHUB_ORG, GITHUB_REPO } from '@/lib/github-cache';
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
-const GITHUB_ORG = 'kyutopia';
-const GITHUB_REPO = 'kyutopia-ops';
 const PROJECT_NUMBER = 1;
-
-async function githubGraphQL(query: string, variables: Record<string, unknown> = {}) {
-  const res = await fetch('https://api.github.com/graphql', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${GITHUB_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-    next: { revalidate: 60 },
-  });
-  return res.json();
-}
 
 // GET /api/github — fetch issues + project items
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type') || 'board';
+
+  // Cache/rate limit status
+  if (type === 'status') {
+    return NextResponse.json(getCacheStats());
+  }
+
+  try {
 
   if (type === 'board') {
     // Fetch project board with status fields
@@ -106,16 +98,11 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === 'issues') {
-    // Fetch open issues
     const state = searchParams.get('state') || 'open';
-    const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=${state}&per_page=100`,
-      {
-        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` },
-        next: { revalidate: 60 },
-      }
+    const issues = await cachedFetch(`issues-${state}`, () =>
+      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=${state}&per_page=100`),
+      60_000
     );
-    const issues = await res.json();
     return NextResponse.json(issues);
   }
 
@@ -189,26 +176,18 @@ export async function GET(request: NextRequest) {
 
   if (type === 'pipeline') {
     // Fetch pipeline folder structure from GitHub
-    const res = await fetch(
-      `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`,
-      {
-        headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` },
-        next: { revalidate: 300 },
-      }
+    const dirs = await cachedFetch('pipeline-dirs', () =>
+      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`),
+      300_000
     );
-    const dirs = await res.json();
     if (!Array.isArray(dirs)) return NextResponse.json([]);
 
     const items = await Promise.all(
       dirs.filter((d: any) => d.type === 'dir').map(async (dir: any) => {
-        const filesRes = await fetch(
-          `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline/${dir.name}`,
-          {
-            headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` },
-            next: { revalidate: 300 },
-          }
+        const files = await cachedFetch(`pipeline-${dir.name}`, () =>
+          githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline/${dir.name}`),
+          300_000
         );
-        const files = await filesRes.json();
         const allFiles = Array.isArray(files) ? files : [];
 
         // Classify reports into 6 stages
@@ -263,4 +242,13 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ error: 'Unknown type' }, { status: 400 });
+  } catch (err) {
+    if (err instanceof GitHubError) {
+      console.error(`[github-api] ${err.message} (${err.status})`);
+      if (err.status === 401) return NextResponse.json({ error: 'Token expired' }, { status: 502 });
+      if (err.status === 403 || err.status === 429) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+    }
+    console.error('[github-api] Error:', err);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
 }
