@@ -175,6 +175,69 @@ export async function GET(request: NextRequest) {
   }
 
 
+
+  if (type === 'reports') {
+    // Fetch reports from kyutopia-ops/reports/ folder
+    const dirs = await cachedFetch('reports-root', () =>
+      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/reports`),
+      120_000
+    );
+    if (!Array.isArray(dirs)) return NextResponse.json([]);
+
+    const reports: any[] = [];
+
+    // Process markdown files at root level
+    const mdFiles = dirs.filter((f: any) => f.name.endsWith('.md'));
+    for (const f of mdFiles) {
+      const fn = f.name.toLowerCase();
+      let reportType = 'strategy';
+      if (fn.includes('daily') || fn.includes('coo') || fn.includes('cto') || fn.includes('cso')) reportType = 'daily';
+      else if (fn.includes('weekly') || fn.includes('week')) reportType = 'weekly';
+
+      // Extract date from filename
+      const dateMatch = f.name.match(/^(\d{4}-\d{2}-\d{2})/);
+      const date = dateMatch ? dateMatch[1] : '';
+
+      reports.push({
+        id: f.sha.slice(0, 8),
+        name: f.name,
+        title: f.name.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/-/g, ' '),
+        date,
+        type: reportType,
+        url: f.html_url,
+        downloadUrl: f.download_url,
+      });
+    }
+
+    // Process subdirectories (daily/, weekly/, strategy/)
+    const subDirs = dirs.filter((d: any) => d.type === 'dir');
+    for (const dir of subDirs) {
+      try {
+        const subFiles = await cachedFetch(`reports-${dir.name}`, () =>
+          githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/reports/${dir.name}`),
+          120_000
+        );
+        if (!Array.isArray(subFiles)) continue;
+        for (const f of subFiles.filter((f: any) => f.name.endsWith('.md'))) {
+          const dateMatch = f.name.match(/(\d{4}-\d{2}-\d{2})/);
+          const date = dateMatch ? dateMatch[1] : '';
+          reports.push({
+            id: f.sha.slice(0, 8),
+            name: f.name,
+            title: f.name.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/-/g, ' '),
+            date,
+            type: dir.name === 'daily' ? 'daily' : dir.name === 'weekly' ? 'weekly' : dir.name === 'blog-drafts' ? 'strategy' : dir.name,
+            url: f.html_url,
+            downloadUrl: f.download_url,
+            folder: dir.name,
+          });
+        }
+      } catch {}
+    }
+
+    return NextResponse.json(reports.sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
+  }
+
   if (type === 'kpi') {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
