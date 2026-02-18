@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
     const reports: any[] = [];
 
     // Process markdown files at root level
-    const mdFiles = dirs.filter((f: any) => f.name.endsWith('.md'));
+    const mdFiles = dirs.filter((f: any) => f.name.endsWith('.md') && f.name !== 'CONVENTION.md');
     for (const f of mdFiles) {
       const fn = f.name.toLowerCase();
       let reportType = 'strategy';
@@ -218,7 +218,7 @@ export async function GET(request: NextRequest) {
           120_000
         );
         if (!Array.isArray(subFiles)) continue;
-        for (const f of subFiles.filter((f: any) => f.name.endsWith('.md'))) {
+        for (const f of subFiles.filter((f: any) => f.name.endsWith('.md') && f.name !== 'CONVENTION.md')) {
           const dateMatch = f.name.match(/(\d{4}-\d{2}-\d{2})/);
           const date = dateMatch ? dateMatch[1] : '';
           reports.push({
@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
             name: f.name,
             title: f.name.replace('.md', '').replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/-/g, ' '),
             date,
-            type: dir.name === 'daily' ? 'daily' : dir.name === 'weekly' ? 'weekly' : dir.name === 'blog-drafts' ? 'strategy' : dir.name,
+            type: dir.name,
             url: f.html_url,
             downloadUrl: f.download_url,
             folder: dir.name,
