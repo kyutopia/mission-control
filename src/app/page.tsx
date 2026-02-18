@@ -153,7 +153,7 @@ export default function CEODashboard() {
           <div className="bg-mc-bg-secondary rounded-xl border border-mc-border p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">📋 태스크 현황</h2>
-              <Link href="/workspace/default" className="text-xs text-mc-accent hover:underline">칸반 보기</Link>
+              <Link href="/kanban" className="text-xs text-mc-accent hover:underline">칸반 보기</Link>
             </div>
             <div className="space-y-3">
               <div className="flex justify-between items-center">

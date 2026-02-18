@@ -57,12 +57,12 @@ export default function BlogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-mc-bg p-3 sm:p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6"><div className="max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/" className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary">
           <ChevronLeft className="w-5 h-5" />
         </Link>
-        <h1 className="text-xl sm:text-2xl font-bold text-mc-text">✍️ 블로그 발행 트래커</h1>
+        <h1 className="text-2xl font-bold text-mc-text">✍️ 블로그 발행 트래커</h1>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-6">
@@ -84,7 +84,7 @@ export default function BlogPage() {
         </div>
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg p-4 sm:p-6 mb-6 border border-mc-bg-tertiary">
+      <div className="bg-mc-bg-secondary rounded-xl p-4 sm:p-6 mb-6 border border-mc-bg-tertiary">
         <h2 className="text-lg font-bold text-mc-text mb-4">📅 최근 7일 발행 현황</h2>
         <div className="flex items-end justify-between h-32 gap-2">
           {dailyStats.map((stat, i) => (
@@ -118,7 +118,7 @@ export default function BlogPage() {
         ))}
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary hidden md:block">
+      <div className="bg-mc-bg-secondary rounded-xl overflow-x-auto border border-mc-bg-tertiary hidden md:block">
         <table className="w-full min-w-[600px]">
           <thead className="bg-mc-bg-tertiary">
             <tr>
@@ -144,13 +144,13 @@ export default function BlogPage() {
                 </td>
                 <td className="px-4 py-3 text-mc-text-secondary text-sm">{post.keyword || "-"}</td>
                 <td className="px-4 py-3">
-                  <span className="px-2 py-1 rounded text-xs bg-mc-bg-tertiary text-mc-text-secondary">
+                  <span className="px-2 py-1 rounded-lg text-xs bg-mc-bg-tertiary text-mc-text-secondary">
                     {post.category || "미분류"}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-center">
                   <span
-                    className={`px-2 py-1 rounded text-xs ${
+                    className={`px-2 py-1 rounded-lg text-xs ${
                       post.status === "published"
                         ? "bg-mc-accent-green/20 text-mc-accent-green"
                         : post.status === "scheduled"
@@ -177,7 +177,7 @@ export default function BlogPage() {
       {/* Mobile Card List */}
       <div className="md:hidden space-y-3">
         {filteredPosts.map((post) => (
-          <div key={post.id} className="bg-mc-bg-secondary rounded-lg border border-mc-bg-tertiary p-4">
+          <div key={post.id} className="bg-mc-bg-secondary rounded-xl border border-mc-bg-tertiary p-4">
             <div className="flex items-start justify-between gap-2 mb-2">
               <h3 className="text-sm font-medium flex-1">
                 {post.url ? (
@@ -207,6 +207,6 @@ export default function BlogPage() {
           <div className="text-center py-8 text-mc-text-secondary">게시글이 없습니다.</div>
         )}
       </div>
-    </div>
+    </div></div>
   );
 }

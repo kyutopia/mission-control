@@ -65,7 +65,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-mc-bg">
       {/* Header */}
       <div className="border-b border-mc-border bg-mc-bg-secondary">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push('/')}
@@ -89,7 +89,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 py-2 bg-mc-accent text-mc-bg rounded hover:bg-mc-accent/90 flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 bg-mc-accent text-white rounded hover:bg-mc-accent/90 flex items-center gap-2 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Changes'}
@@ -99,7 +99,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Success Message */}
         {saveSuccess && (
           <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 rounded text-green-400">
@@ -115,7 +115,7 @@ export default function SettingsPage() {
         )}
 
         {/* Workspace Paths */}
-        <section className="mb-8 p-6 bg-mc-bg-secondary border border-mc-border rounded-lg">
+        <section className="mb-8 p-3 sm:p-4 lg:p-6 bg-mc-bg-secondary border border-mc-border rounded-xl">
           <div className="flex items-center gap-2 mb-4">
             <FolderOpen className="w-5 h-5 text-mc-accent" />
             <h2 className="text-xl font-semibold text-mc-text">Workspace Paths</h2>
@@ -134,7 +134,7 @@ export default function SettingsPage() {
                 value={config.workspaceBasePath}
                 onChange={(e) => handleChange('workspaceBasePath', e.target.value)}
                 placeholder="~/Documents/Shared"
-                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded text-mc-text focus:border-mc-accent focus:outline-none"
+                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded-lg text-mc-text focus:border-mc-accent focus:outline-none"
               />
               <p className="text-xs text-mc-text-secondary mt-1">
                 Base directory for all Mission Control files. Use ~ for home directory.
@@ -150,7 +150,7 @@ export default function SettingsPage() {
                 value={config.projectsPath}
                 onChange={(e) => handleChange('projectsPath', e.target.value)}
                 placeholder="~/Documents/Shared/projects"
-                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded text-mc-text focus:border-mc-accent focus:outline-none"
+                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded-lg text-mc-text focus:border-mc-accent focus:outline-none"
               />
               <p className="text-xs text-mc-text-secondary mt-1">
                 Directory where project folders are created. Each project gets its own folder.
@@ -166,7 +166,7 @@ export default function SettingsPage() {
                 value={config.defaultProjectName}
                 onChange={(e) => handleChange('defaultProjectName', e.target.value)}
                 placeholder="mission-control"
-                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded text-mc-text focus:border-mc-accent focus:outline-none"
+                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded-lg text-mc-text focus:border-mc-accent focus:outline-none"
               />
               <p className="text-xs text-mc-text-secondary mt-1">
                 Default name for new projects. Can be changed per project.
@@ -176,7 +176,7 @@ export default function SettingsPage() {
         </section>
 
         {/* API Configuration */}
-        <section className="mb-8 p-6 bg-mc-bg-secondary border border-mc-border rounded-lg">
+        <section className="mb-8 p-3 sm:p-4 lg:p-6 bg-mc-bg-secondary border border-mc-border rounded-xl">
           <div className="flex items-center gap-2 mb-4">
             <LinkIcon className="w-5 h-5 text-mc-accent" />
             <h2 className="text-xl font-semibold text-mc-text">API Configuration</h2>
@@ -195,7 +195,7 @@ export default function SettingsPage() {
                 value={config.missionControlUrl}
                 onChange={(e) => handleChange('missionControlUrl', e.target.value)}
                 placeholder="http://localhost:3000"
-                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded text-mc-text focus:border-mc-accent focus:outline-none"
+                className="w-full px-4 py-2 bg-mc-bg border border-mc-border rounded-lg text-mc-text focus:border-mc-accent focus:outline-none"
               />
               <p className="text-xs text-mc-text-secondary mt-1">
                 URL where Mission Control is running. Auto-detected by default. Change for remote access.
@@ -205,7 +205,7 @@ export default function SettingsPage() {
         </section>
 
         {/* Environment Variables Note */}
-        <section className="p-6 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+        <section className="p-3 sm:p-4 lg:p-6 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <h3 className="text-lg font-semibold text-blue-400 mb-2">
             📝 Environment Variables
           </h3>

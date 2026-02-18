@@ -80,7 +80,7 @@ export default function RevenuePage() {
   const maxDailyRevenue = Math.max(...dailyRevenue.map((d) => d.adsense + d.kmong + d.project), 1);
 
   return (
-    <div className="min-h-screen bg-mc-bg p-3 sm:p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6"><div className="max-w-7xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/" className="p-2 hover:bg-mc-bg-tertiary rounded text-mc-text-secondary">
           <ChevronLeft className="w-5 h-5" />
@@ -126,7 +126,7 @@ export default function RevenuePage() {
         </div>
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg p-6 mb-6 border border-mc-bg-tertiary">
+      <div className="bg-mc-bg-secondary rounded-xl p-3 sm:p-4 lg:p-6 mb-6 border border-mc-bg-tertiary">
         <h2 className="text-lg font-bold text-mc-text mb-4">📈 최근 14일 매출 추이</h2>
         <div className="flex items-end justify-between h-40 gap-1">
           {dailyRevenue.map((day, i) => {
@@ -167,7 +167,7 @@ export default function RevenuePage() {
         ))}
       </div>
 
-      <div className="bg-mc-bg-secondary rounded-lg overflow-x-auto border border-mc-bg-tertiary hidden md:block">
+      <div className="bg-mc-bg-secondary rounded-xl overflow-x-auto border border-mc-bg-tertiary hidden md:block">
         <table className="w-full min-w-[500px]">
           <thead className="bg-mc-bg-tertiary">
             <tr>
@@ -182,7 +182,7 @@ export default function RevenuePage() {
               <tr key={rev.id} className="hover:bg-mc-bg-tertiary/50">
                 <td className="px-4 py-3 text-mc-text-secondary">{new Date(rev.date).toLocaleDateString("ko-KR")}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-1 rounded text-xs border ${sourceColors[rev.source] || sourceColors.other}`}>
+                  <span className={`px-2 py-1 rounded-lg text-xs border ${sourceColors[rev.source] || sourceColors.other}`}>
                     {rev.source}
                   </span>
                 </td>
@@ -199,7 +199,7 @@ export default function RevenuePage() {
       {/* Mobile Revenue List */}
       <div className="md:hidden space-y-2">
         {filteredRevenues.map((rev) => (
-          <div key={rev.id} className="bg-mc-bg-secondary rounded-lg border border-mc-bg-tertiary p-3">
+          <div key={rev.id} className="bg-mc-bg-secondary rounded-xl border border-mc-bg-tertiary p-3">
             <div className="flex items-center justify-between mb-1">
               <span className={"px-2 py-0.5 rounded text-xs border " + (sourceColors[rev.source] || sourceColors.other)}>
                 {rev.source}
@@ -214,6 +214,6 @@ export default function RevenuePage() {
           <div className="text-center py-8 text-mc-text-secondary">데이터가 없습니다.</div>
         )}
       </div>
-    </div>
+    </div></div>
   );
 }
