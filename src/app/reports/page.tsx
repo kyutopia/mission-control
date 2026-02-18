@@ -1,143 +1,198 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Calendar, Search, User } from "lucide-react";
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+interface KPIData {
+  issues: {
+    openCount: number;
+    closedThisWeek: number;
+    createdThisWeek: number;
+    avgCloseTimeDays: number;
+    byAssignee: { name: string; emoji: string; open: number; closed: number }[];
+  };
+  prs: {
+    openCount: number;
+    mergedThisWeek: number;
+    avgMergeTimeHours: number;
+  };
+  pipeline: {
+    totalProjects: number;
+    activeProjects: number;
+  };
+}
 
 interface Report {
   id: string;
   date: string;
-  agent_id: string;
-  agent_name: string;
-  content: string;
+  type: 'daily' | 'weekly' | 'strategy';
+  title: string;
   summary: string;
-  submitted_at: string;
+  content: string;
+  author: string;
+}
+
+const AUTHOR_MAP: Record<string, { emoji: string; name: string }> = {
+  'doyun-kyu': { emoji: '🦁', name: '도윤' },
+  'gunwoo-kyu': { emoji: '🐉', name: '건우' },
+  'solhee-kyu': { emoji: '🐺', name: '솔희' },
+  'lidoky': { emoji: '🐴', name: '동규' },
+};
+
+function KPICard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className="bg-mc-bg-secondary rounded-xl border border-mc-border p-4">
+      <div className="text-xs text-mc-text-secondary mb-1">{label}</div>
+      <div className={`text-2xl font-bold ${color || 'text-mc-text'}`}>{value}</div>
+      {sub && <div className="text-xs text-mc-text-secondary mt-1">{sub}</div>}
+    </div>
+  );
 }
 
 export default function ReportsPage() {
+  const [kpi, setKpi] = useState<KPIData | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState("");
-  const [agentFilter, setAgentFilter] = useState("");
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<'all' | 'daily' | 'weekly' | 'strategy'>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (dateFilter) params.set("date", dateFilter);
-    if (agentFilter) params.set("agent_id", agentFilter);
+    Promise.all([
+      fetch('/api/github?type=kpi').then(r => r.json()).catch(() => null),
+      fetch('/api/reports').then(r => r.json()).catch(() => []),
+    ]).then(([kpiData, reportsData]) => {
+      setKpi(kpiData);
+      setReports(Array.isArray(reportsData) ? reportsData : []);
+      setLoading(false);
+    });
+  }, []);
 
-    fetch(`/api/reports?${params}`)
-      .then((r) => r.json())
-      .then((data) => { setReports(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [dateFilter, agentFilter]);
+  const filtered = filter === 'all' ? reports : reports.filter(r => r.type === filter);
 
-  const filteredReports = search
-    ? reports.filter((r) => r.content.toLowerCase().includes(search.toLowerCase()) || r.agent_name?.toLowerCase().includes(search.toLowerCase()))
-    : reports;
-
-  const uniqueDates = Array.from(new Set(reports.map((r) => r.date))).sort().reverse();
-  const uniqueAgents = Array.from(new Set(reports.map((r) => r.agent_name).filter(Boolean)));
-
-  if (loading) return <div className="min-h-screen bg-mc-bg text-mc-text flex items-center justify-center">Loading...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-mc-bg flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-4xl mb-4 animate-pulse">📊</div>
+        <p className="text-mc-text-secondary">보고서 로딩중...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-mc-bg text-mc-text p-3 sm:p-4 lg:p-6">
+    <div className="min-h-screen bg-mc-bg p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/" className="text-mc-text-secondary hover:text-mc-text"><ChevronLeft size={20} /></Link>
-          <h1 className="text-2xl font-bold">📋 Daily Reports</h1>
-          <span className="text-sm text-mc-text-secondary ml-2">{reports.length} reports</span>
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/" className="text-mc-text-secondary hover:text-mc-text text-sm transition-colors">← 대시보드</Link>
+          </div>
+          <h1 className="text-2xl font-bold">📊 보고서 & KPI</h1>
+          <p className="text-mc-text-secondary text-sm mt-1">KYUTOPIA 성과 지표 + 보고서 아카이브</p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-mc-text-secondary" />
-            <input
-              placeholder="Search reports..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-mc-bg-secondary border border-mc-border rounded-xl pl-9 pr-3 py-2 text-sm text-mc-text"
-            />
-          </div>
-          <div className="relative">
-            <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-mc-text-secondary" />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="bg-mc-bg-secondary border border-mc-border rounded-xl pl-9 pr-3 py-2 text-sm text-mc-text"
-            />
-          </div>
-          <select
-            value={agentFilter}
-            onChange={(e) => setAgentFilter(e.target.value)}
-            className="bg-mc-bg-secondary border border-mc-border rounded-xl px-3 py-2 text-sm text-mc-text"
-          >
-            <option value="">All agents</option>
-            {uniqueAgents.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-        </div>
+        {/* KPI Dashboard */}
+        {kpi && (
+          <div className="mb-8">
+            <h2 className="font-semibold mb-4 text-mc-text-secondary text-sm">📈 이번 주 KPI</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KPICard label="오픈 이슈" value={kpi.issues.openCount} color="text-yellow-400" />
+              <KPICard label="이번 주 클로즈" value={kpi.issues.closedThisWeek} color="text-green-400" sub={`생성 ${kpi.issues.createdThisWeek}건`} />
+              <KPICard
+                label="클로즈율"
+                value={kpi.issues.createdThisWeek > 0 ? `${Math.round((kpi.issues.closedThisWeek / (kpi.issues.closedThisWeek + kpi.issues.openCount)) * 100)}%` : '-'}
+                color="text-mc-accent"
+              />
+              <KPICard label="오픈 PR" value={kpi.prs.openCount} color="text-purple-400" />
+              <KPICard label="이번 주 머지" value={kpi.prs.mergedThisWeek} color="text-green-400" />
+              <KPICard label="파이프라인" value={`${kpi.pipeline.activeProjects}/${kpi.pipeline.totalProjects}`} sub="활성/전체" />
+            </div>
 
-        {/* Reports list */}
-        {filteredReports.length === 0 ? (
-          <div className="text-center text-mc-text-secondary py-12">
-            {reports.length === 0 ? "No reports yet" : "No reports match your filters"}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredReports.map((report) => (
-              <div key={report.id} className="bg-mc-bg-secondary border border-mc-border rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs bg-mc-accent/20 text-mc-accent px-2 py-1 rounded-lg">
-                      📅 {report.date}
-                    </span>
-                    {report.agent_name && (
-                      <span className="text-xs text-mc-text-secondary flex items-center gap-1">
-                        <User size={12} /> {report.agent_name}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-mc-text-secondary">
-                    {new Date(report.submitted_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-
-                {report.summary && (
-                  <div className="text-sm font-medium text-mc-accent-green mb-2">📌 {report.summary}</div>
-                )}
-
-                <div className="text-sm text-mc-text-secondary whitespace-pre-wrap leading-relaxed">
-                  {report.content.length > 500 ? report.content.slice(0, 500) + "..." : report.content}
+            {/* Per-assignee breakdown */}
+            {kpi.issues.byAssignee.length > 0 && (
+              <div className="mt-4 bg-mc-bg-secondary rounded-xl border border-mc-border p-4">
+                <h3 className="text-xs text-mc-text-secondary mb-3">👥 담당자별 처리 현황</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {kpi.issues.byAssignee.map(a => (
+                    <div key={a.name} className="flex items-center gap-3">
+                      <span className="text-xl">{a.emoji}</span>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{a.name}</div>
+                        <div className="flex gap-3 text-xs text-mc-text-secondary">
+                          <span className="text-yellow-400">⏳ {a.open}</span>
+                          <span className="text-green-400">✅ {a.closed}</span>
+                        </div>
+                      </div>
+                      <div className="w-20 bg-mc-bg-tertiary rounded-full h-2">
+                        <div
+                          className="bg-green-500 h-2 rounded-full"
+                          style={{ width: `${a.open + a.closed > 0 ? (a.closed / (a.open + a.closed)) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
 
-        {/* Date sidebar */}
-        {uniqueDates.length > 0 && (
-          <div className="mt-8">
-            <h3 className="text-sm font-semibold text-mc-text-secondary mb-3">📅 Report Dates</h3>
-            <div className="flex flex-wrap gap-2">
-              {uniqueDates.slice(0, 30).map((date) => (
+        {/* Reports Archive */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h2 className="font-semibold text-mc-text-secondary text-sm">📋 보고서 아카이브 ({filtered.length}건)</h2>
+            <div className="flex gap-2">
+              {(['all', 'daily', 'weekly', 'strategy'] as const).map(f => (
                 <button
-                  key={date}
-                  onClick={() => setDateFilter(dateFilter === date ? "" : date)}
-                  className={`text-xs px-2 py-1 rounded-lg border ${
-                    dateFilter === date
-                      ? "bg-mc-accent/20 text-mc-accent border-mc-accent/30"
-                      : "bg-mc-bg-secondary text-mc-text-secondary border-mc-border hover:border-mc-accent/30"
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                    filter === f
+                      ? 'bg-mc-accent/20 border-mc-accent text-mc-accent'
+                      : 'bg-mc-bg-secondary border-mc-border text-mc-text-secondary hover:border-mc-accent/40'
                   }`}
                 >
-                  {date}
+                  {f === 'all' ? '전체' : f === 'daily' ? '📊 일일' : f === 'weekly' ? '📈 주간' : '🔍 전략'}
                 </button>
               ))}
             </div>
           </div>
-        )}
+
+          <div className="space-y-2">
+            {filtered.map(report => {
+              const isExpanded = expandedId === report.id;
+              return (
+                <div key={report.id} className="bg-mc-bg-secondary rounded-xl border border-mc-border overflow-hidden">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : report.id)}
+                    className="w-full px-5 py-4 flex items-center gap-4 hover:bg-mc-bg-tertiary/30 transition-colors text-left"
+                  >
+                    <span className="text-xs px-2 py-1 rounded bg-mc-bg-tertiary text-mc-text-secondary">
+                      {report.type === 'daily' ? '📊' : report.type === 'weekly' ? '📈' : '🔍'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{report.title}</div>
+                      <div className="text-xs text-mc-text-secondary mt-0.5">{report.summary}</div>
+                    </div>
+                    <span className="text-xs text-mc-text-secondary whitespace-nowrap">{report.date}</span>
+                    <span className="text-xs text-mc-text-secondary">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {isExpanded && (
+                    <div className="px-5 pb-4 border-t border-mc-border">
+                      <div className="text-sm text-mc-text-secondary whitespace-pre-wrap leading-relaxed mt-3">
+                        {report.content}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {filtered.length === 0 && (
+              <div className="text-center py-12 text-mc-text-secondary">
+                <p className="text-sm">보고서가 아직 없습니다. 자동 생성 설정 후 매일 누적됩니다.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

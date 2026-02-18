@@ -174,6 +174,79 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(pulls.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
   }
 
+
+  if (type === 'kpi') {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Fetch open + recently closed issues
+    const [openIssues, closedIssues] = await Promise.all([
+      cachedFetch('kpi-open', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=open&per_page=100`), 120_000),
+      cachedFetch('kpi-closed', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=closed&per_page=100&since=${weekAgo}`), 120_000),
+    ]);
+
+    const openArr = Array.isArray(openIssues) ? openIssues.filter((i: any) => !i.pull_request) : [];
+    const closedArr = Array.isArray(closedIssues) ? closedIssues.filter((i: any) => !i.pull_request) : [];
+    const createdThisWeek = openArr.filter((i: any) => new Date(i.created_at) > new Date(weekAgo)).length
+      + closedArr.filter((i: any) => new Date(i.created_at) > new Date(weekAgo)).length;
+
+    // Per-assignee stats
+    const assigneeMap: Record<string, { open: number; closed: number }> = {};
+    const loginMap: Record<string, { emoji: string; name: string }> = {
+      'doyun-kyu': { emoji: '🦁', name: '도윤' },
+      'gunwoo-kyu': { emoji: '🐉', name: '건우' },
+      'solhee-kyu': { emoji: '🐺', name: '솔희' },
+      'lidoky': { emoji: '🐴', name: '동규' },
+    };
+    for (const issue of openArr) {
+      for (const a of (issue.assignees || [])) {
+        if (!assigneeMap[a.login]) assigneeMap[a.login] = { open: 0, closed: 0 };
+        assigneeMap[a.login].open++;
+      }
+    }
+    for (const issue of closedArr) {
+      for (const a of (issue.assignees || [])) {
+        if (!assigneeMap[a.login]) assigneeMap[a.login] = { open: 0, closed: 0 };
+        assigneeMap[a.login].closed++;
+      }
+    }
+
+    const byAssignee = Object.entries(assigneeMap).map(([login, stats]) => ({
+      ...stats,
+      name: loginMap[login]?.name || login,
+      emoji: loginMap[login]?.emoji || '👤',
+    }));
+
+    // PR stats
+    const openPRs = await cachedFetch('kpi-prs', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/pulls?state=all&per_page=30`), 120_000);
+    const prArr = Array.isArray(openPRs) ? openPRs : [];
+    const openPRCount = prArr.filter((p: any) => p.state === 'open').length;
+    const mergedThisWeek = prArr.filter((p: any) => p.merged_at && new Date(p.merged_at) > new Date(weekAgo)).length;
+
+    // Pipeline stats
+    const pipelineDirs = await cachedFetch('kpi-pipeline', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`), 300_000);
+    const dirArr = Array.isArray(pipelineDirs) ? pipelineDirs.filter((d: any) => d.type === 'dir') : [];
+
+    return NextResponse.json({
+      issues: {
+        openCount: openArr.length,
+        closedThisWeek: closedArr.length,
+        createdThisWeek,
+        avgCloseTimeDays: 0,
+        byAssignee,
+      },
+      prs: {
+        openCount: openPRCount,
+        mergedThisWeek,
+        avgMergeTimeHours: 0,
+      },
+      pipeline: {
+        totalProjects: dirArr.length,
+        activeProjects: dirArr.length,
+      },
+    });
+  }
+
   if (type === 'pipeline') {
     // Fetch pipeline folder structure from GitHub
     const dirs = await cachedFetch('pipeline-dirs', () =>
