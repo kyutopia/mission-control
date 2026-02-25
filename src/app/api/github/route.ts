@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
                 content {
                   ... on Issue {
                     number title state body url
+                    repository { name }
                     labels(first: 10) { nodes { name color } }
                     assignees(first: 5) { nodes { login avatarUrl } }
                     createdAt updatedAt closedAt
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
         assignee,
         createdAt: item.content.createdAt,
         updatedAt: item.content.updatedAt,
+        repo: item.content.repository?.name || '',
       };
       
       if (columns[status]) {
@@ -99,11 +101,31 @@ export async function GET(request: NextRequest) {
 
   if (type === 'issues') {
     const state = searchParams.get('state') || 'open';
-    const issues = await cachedFetch(`issues-${state}`, () =>
-      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=${state}&per_page=100`),
-      60_000
-    );
-    return NextResponse.json(issues);
+    const repoFilter = searchParams.get('repo') || '';
+    
+    // Fetch issues from all org repos (non-archived)
+    const allIssues = await cachedFetch(`org-issues-${state}`, async () => {
+      const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+      const activeRepos = (repos as any[]).filter((r: any) => !r.archived);
+      const issuePromises = activeRepos.map(async (repo: any) => {
+        try {
+          const issues = await githubREST(`/repos/${GITHUB_ORG}/${repo.name}/issues?state=${state}&per_page=50`);
+          return (issues as any[])
+            .filter((i: any) => !i.pull_request)
+            .map((i: any) => ({ ...i, repo: repo.name }));
+        } catch { return []; }
+      });
+      const results = await Promise.all(issuePromises);
+      return results.flat().sort((a: any, b: any) => 
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+    }, 60_000);
+
+    const filtered = repoFilter 
+      ? (allIssues as any[]).filter((i: any) => i.repo === repoFilter)
+      : allIssues;
+    
+    return NextResponse.json(filtered);
   }
 
 
@@ -244,8 +266,24 @@ export async function GET(request: NextRequest) {
 
     // Fetch open + recently closed issues
     const [openIssues, closedIssues] = await Promise.all([
-      cachedFetch('kpi-open', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=open&per_page=100`), 120_000),
-      cachedFetch('kpi-closed', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=closed&per_page=100&since=${weekAgo}`), 120_000),
+      cachedFetch('kpi-open', async () => {
+        const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+        const active = (repos as any[]).filter((r: any) => !r.archived);
+        const all = await Promise.all(active.map(async (r: any) => {
+          try { return await githubREST(`/repos/${GITHUB_ORG}/${r.name}/issues?state=open&per_page=50`); }
+          catch { return []; }
+        }));
+        return all.flat().filter((i: any) => !i.pull_request);
+      }, 120_000),
+      cachedFetch('kpi-closed', async () => {
+        const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+        const active = (repos as any[]).filter((r: any) => !r.archived);
+        const all = await Promise.all(active.map(async (r: any) => {
+          try { return await githubREST(`/repos/${GITHUB_ORG}/${r.name}/issues?state=closed&per_page=50&since=${weekAgo}`); }
+          catch { return []; }
+        }));
+        return all.flat().filter((i: any) => !i.pull_request);
+      }, 120_000),
     ]);
 
     const openArr = Array.isArray(openIssues) ? openIssues.filter((i: any) => !i.pull_request) : [];

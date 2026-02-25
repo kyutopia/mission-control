@@ -16,6 +16,7 @@ interface BoardCard {
   assignee: string;
   createdAt: string;
   updatedAt: string;
+  repo?: string;
 }
 
 interface BoardData {
@@ -106,6 +107,7 @@ export default function KanbanBoard() {
   const [error, setError] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterRepo, setFilterRepo] = useState('all');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,6 +131,15 @@ export default function KanbanBoard() {
     return Array.from(set);
   }, [board]);
 
+  const repos = useMemo(() => {
+    if (!board) return [];
+    const set = new Set<string>();
+    Object.values(board.columns).flat().forEach(c => {
+      if (c.repo) set.add(c.repo);
+    });
+    return Array.from(set).sort();
+  }, [board]);
+
   const filteredBoard = useMemo(() => {
     if (!board) return null;
     const filtered: Record<string, BoardCard[]> = {};
@@ -141,11 +152,12 @@ export default function KanbanBoard() {
           if (projectAssignee !== filterAssignee && mapped !== filterAssignee) return false;
         }
         if (filterPriority !== 'all' && c.priority !== filterPriority) return false;
+        if (filterRepo !== 'all' && c.repo !== filterRepo) return false;
         return true;
       });
     }
     return filtered;
-  }, [board, filterAssignee, filterPriority]);
+  }, [board, filterAssignee, filterPriority, filterRepo]);
 
   if (loading) return (
     <div className="min-h-screen bg-mc-bg flex items-center justify-center">
@@ -200,6 +212,14 @@ export default function KanbanBoard() {
               >
                 <option value="all">⚡ 우선순위 전체</option>
                 {Object.keys(PRIORITY_MAP).map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <select
+                value={filterRepo}
+                onChange={e => setFilterRepo(e.target.value)}
+                className="bg-mc-bg-secondary text-mc-text-secondary text-xs px-3 py-2 rounded-lg border border-mc-border focus:border-mc-accent outline-none transition-colors"
+              >
+                <option value="all">📦 Repo 전체</option>
+                {repos.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
           </div>
@@ -268,6 +288,13 @@ export default function KanbanBoard() {
                         <p className="text-sm font-medium leading-snug mb-2 group-hover:text-mc-accent transition-colors">
                           {card.title}
                         </p>
+
+                        {/* Repo Badge */}
+                        {card.repo && (
+                          <span className="inline-block text-[10px] px-1.5 py-0.5 rounded bg-mc-accent/10 text-mc-accent border border-mc-accent/20 mb-2 font-mono">
+                            {card.repo}
+                          </span>
+                        )}
 
                         {/* Footer */}
                         <div className="flex items-center justify-between text-[11px]">
