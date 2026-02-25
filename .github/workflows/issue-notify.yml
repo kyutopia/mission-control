@@ -1,0 +1,31 @@
+name: Issue Notification
+on:
+  issues:
+    types: [opened, closed, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Issue Notification
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          ISSUE_ACTION: ${{ github.event.action }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          if [ "$ISSUE_ACTION" = "opened" ]; then
+            EMOJI="📋"
+            COLOR="3447003"
+          elif [ "$ISSUE_ACTION" = "closed" ]; then
+            EMOJI="✅"
+            COLOR="3066993"
+          else
+            EMOJI="🔄"
+            COLOR="16776960"
+          fi
+          curl -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"${EMOJI} Issue [${ISSUE_ACTION}] ${ISSUE_TITLE}\",\"url\":\"${ISSUE_URL}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Repo\",\"value\":\"${REPO_NAME}\",\"inline\":true},{\"name\":\"Author\",\"value\":\"${ISSUE_USER}\",\"inline\":true}]}]}" \
+            "$WEBHOOK_URL"
