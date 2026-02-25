@@ -47,7 +47,8 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GITHUB_ORG = 'kyutopia';
 const GITHUB_REPO = 'kyutopia-ops';
 
-export { GITHUB_ORG, GITHUB_REPO };
+const PIPELINE_REPO = 'business-discovery';
+export { GITHUB_ORG, GITHUB_REPO, PIPELINE_REPO };
 
 export async function githubGraphQL(query: string, variables: Record<string, unknown> = {}) {
   if (!GITHUB_TOKEN) {

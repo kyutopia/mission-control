@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const GITHUB_ORG = process.env.GITHUB_ORG || 'kyutopia';
-const GITHUB_REPO = process.env.GITHUB_REPO || 'kyutopia-ops';
+const BLOG_REPO = process.env.BLOG_REPO || 'blog';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
 let cache: { data: any; ts: number } | null = null;
@@ -11,7 +11,7 @@ async function fetchBlogDrafts() {
   if (cache && Date.now() - cache.ts < CACHE_TTL) return cache.data;
 
   const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/blog-drafts`,
+    `https://api.github.com/repos/${GITHUB_ORG}/${BLOG_REPO}/contents/blog-drafts`,
     {
       headers: {
         Authorization: `Bearer ${GITHUB_TOKEN}`,
