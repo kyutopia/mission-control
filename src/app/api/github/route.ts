@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { githubGraphQL, githubREST, cachedFetch, getCacheStats, GitHubError, GITHUB_ORG, GITHUB_REPO } from '@/lib/github-cache';
+import { githubGraphQL, githubREST, cachedFetch, getCacheStats, GitHubError, GITHUB_ORG, GITHUB_REPO, PIPELINE_REPO } from '@/lib/github-cache';
 
 const PROJECT_NUMBER = 1;
 
@@ -287,8 +287,8 @@ export async function GET(request: NextRequest) {
     const mergedThisWeek = prArr.filter((p: any) => p.merged_at && new Date(p.merged_at) > new Date(weekAgo)).length;
 
     // Pipeline stats
-    const pipelineDirs = await cachedFetch('kpi-pipeline', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`), 300_000);
-    const dirArr = Array.isArray(pipelineDirs) ? pipelineDirs.filter((d: any) => d.type === 'dir') : [];
+    const pipelineDirs = await cachedFetch('kpi-pipeline', () => githubREST(`/repos/${GITHUB_ORG}/${PIPELINE_REPO}/contents`), 300_000);
+    const dirArr = Array.isArray(pipelineDirs) ? pipelineDirs.filter((d: any) => d.type === 'dir' && /^\d/.test(d.name)) : [];
 
     return NextResponse.json({
       issues: {
@@ -313,15 +313,15 @@ export async function GET(request: NextRequest) {
   if (type === 'pipeline') {
     // Fetch pipeline folder structure from GitHub
     const dirs = await cachedFetch('pipeline-dirs', () =>
-      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline`),
+      githubREST(`/repos/${GITHUB_ORG}/${PIPELINE_REPO}/contents`),
       300_000
     );
     if (!Array.isArray(dirs)) return NextResponse.json([]);
 
     const items = await Promise.all(
-      dirs.filter((d: any) => d.type === 'dir').map(async (dir: any) => {
+      dirs.filter((d: any) => d.type === 'dir' && /^\d/.test(d.name)).map(async (dir: any) => {
         const files = await cachedFetch(`pipeline-${dir.name}`, () =>
-          githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/contents/pipeline/${dir.name}`),
+          githubREST(`/repos/${GITHUB_ORG}/${PIPELINE_REPO}/contents/${dir.name}`),
           300_000
         );
         const allFiles = Array.isArray(files) ? files : [];
