@@ -15,9 +15,14 @@ jobs:
           PUSHER: ${{ github.event.head_commit.author.username }}
           REPO_NAME: ${{ github.repository }}
         run: |
+          MSG=$(echo "$COMMIT_MSG" | head -1)
+          # Skip auto-generated commits (server status, heartbeat, etc.)
+          if echo "$MSG" | grep -qiE '^auto:|^chore\(auto\):|^\[auto\]'; then
+            echo "Skipping auto-commit notification: $MSG"
+            exit 0
+          fi
           EMOJI="🚀"
           COLOR="10181046"
-          MSG=$(echo "$COMMIT_MSG" | head -1)
           curl -H "Content-Type: application/json" \
             -d "{\"embeds\":[{\"title\":\"${EMOJI} Push to main: ${MSG}\",\"url\":\"${COMMIT_URL}\",\"color\":${COLOR},\"fields\":[{\"name\":\"Repo\",\"value\":\"${REPO_NAME}\",\"inline\":true},{\"name\":\"Author\",\"value\":\"${PUSHER}\",\"inline\":true}]}]}" \
             "$WEBHOOK_URL"

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { githubGraphQL, githubREST, cachedFetch, getCacheStats, GitHubError, GITHUB_ORG, GITHUB_REPO, PIPELINE_REPO } from '@/lib/github-cache';
 
-const PROJECT_NUMBER = 1;
-
 // GET /api/github — fetch issues + project items
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -16,94 +14,113 @@ export async function GET(request: NextRequest) {
   try {
 
   if (type === 'board') {
-    // Fetch project board with status fields
-    const { data } = await githubGraphQL(`
-      query {
-        organization(login: "${GITHUB_ORG}") {
-          projectV2(number: ${PROJECT_NUMBER}) {
-            title
-            items(first: 100, orderBy: {field: POSITION, direction: ASC}) {
-              nodes {
-                id
-                fieldValues(first: 20) {
-                  nodes {
-                    ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2Field { name } } }
-                    ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2SingleSelectField { name } } }
-                    ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2Field { name } } }
-                  }
-                }
-                content {
-                  ... on Issue {
-                    number title state body url
-                    labels(first: 10) { nodes { name color } }
-                    assignees(first: 5) { nodes { login avatarUrl } }
-                    createdAt updatedAt closedAt
-                  }
-                  ... on PullRequest {
-                    number title state url
-                    createdAt updatedAt
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    `);
-
-    // Transform to board format
-    const columns: Record<string, any[]> = { 'Todo': [], 'In Progress': [], 'Done': [] };
-    const items = data?.organization?.projectV2?.items?.nodes || [];
+    // Fetch all org issues and organize by status labels
+    const repoFilter = searchParams.get('repo') || '';
     
-    for (const item of items) {
-      if (!item.content) continue;
+    const allIssues = await cachedFetch('board-org-issues', async () => {
+      const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+      const activeRepos = (repos as any[]).filter((r: any) => !r.archived);
+      const issuePromises = activeRepos.map(async (repo: any) => {
+        try {
+          const issues = await githubREST(`/repos/${GITHUB_ORG}/${repo.name}/issues?state=all&per_page=50&sort=updated`);
+          return (issues as any[])
+            .filter((i: any) => !i.pull_request)
+            .map((i: any) => ({ ...i, repo: repo.name }));
+        } catch { return []; }
+      });
+      const results = await Promise.all(issuePromises);
+      return results.flat();
+    }, 60_000);
+
+    const columns: Record<string, any[]> = { 'Todo': [], 'In Progress': [], 'Done': [] };
+    
+    for (const issue of (allIssues as any[])) {
+      if (repoFilter && issue.repo !== repoFilter) continue;
       
+      const labels = (issue.labels || []).map((l: any) => typeof l === 'string' ? l : l.name);
       let status = 'Todo';
-      let priority = '';
-      let assignee = '';
-      
-      for (const fv of item.fieldValues?.nodes || []) {
-        if (fv.field?.name === 'Status') status = fv.name || 'Todo';
-        if (fv.field?.name === '우선순위') priority = fv.name || '';
-        if (fv.field?.name === '담당') assignee = fv.name || '';
+      if (issue.state === 'closed') {
+        status = 'Done';
+      } else if (labels.some((l: string) => l.toLowerCase().includes('in-progress') || l.toLowerCase().includes('in progress') || l.toLowerCase().includes('진행'))) {
+        status = 'In Progress';
+      } else if (labels.some((l: string) => l.toLowerCase().includes('done') || l.toLowerCase().includes('완료'))) {
+        status = 'Done';
       }
+      
+      // Extract priority from labels
+      let priority = '';
+      if (labels.some((l: string) => l.includes('긴급') || l.includes('P0'))) priority = '🔴 긴급';
+      else if (labels.some((l: string) => l.includes('보통') || l.includes('P1'))) priority = '🟡 보통';
+      else if (labels.some((l: string) => l.includes('여유') || l.includes('P2'))) priority = '🟢 여유';
       
       const card = {
-        id: item.id,
-        number: item.content.number,
-        title: item.content.title,
-        state: item.content.state,
-        url: item.content.url,
-        body: item.content.body || "",
-        labels: item.content.labels?.nodes || [],
-        assignees: item.content.assignees?.nodes || [],
+        id: `issue-${issue.repo}-${issue.number}`,
+        number: issue.number,
+        title: issue.title,
+        state: issue.state,
+        url: issue.html_url,
+        body: issue.body || '',
+        labels: (issue.labels || []).map((l: any) => ({
+          name: typeof l === 'string' ? l : l.name,
+          color: typeof l === 'string' ? '666666' : (l.color || '666666'),
+        })),
+        assignees: (issue.assignees || []).map((a: any) => ({
+          login: a.login,
+          avatarUrl: a.avatar_url,
+        })),
         priority,
-        assignee,
-        createdAt: item.content.createdAt,
-        updatedAt: item.content.updatedAt,
+        assignee: '',
+        createdAt: issue.created_at,
+        updatedAt: issue.updated_at,
+        repo: issue.repo,
       };
       
-      if (columns[status]) {
-        columns[status].push(card);
-      } else {
-        columns[status] = [card];
-      }
+      columns[status].push(card);
+    }
+    
+    // Sort: In Progress and Todo by updated, Done by closed
+    for (const col of Object.keys(columns)) {
+      columns[col].sort((a: any, b: any) => 
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
     }
 
+    const totalItems = Object.values(columns).flat().length;
     return NextResponse.json({
-      title: data?.organization?.projectV2?.title || 'Board',
+      title: 'KYUTOPIA 업무 보드',
       columns,
-      totalItems: items.length,
+      totalItems,
     });
   }
 
+
   if (type === 'issues') {
     const state = searchParams.get('state') || 'open';
-    const issues = await cachedFetch(`issues-${state}`, () =>
-      githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=${state}&per_page=100`),
-      60_000
-    );
-    return NextResponse.json(issues);
+    const repoFilter = searchParams.get('repo') || '';
+    
+    // Fetch issues from all org repos (non-archived)
+    const allIssues = await cachedFetch(`org-issues-${state}`, async () => {
+      const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+      const activeRepos = (repos as any[]).filter((r: any) => !r.archived);
+      const issuePromises = activeRepos.map(async (repo: any) => {
+        try {
+          const issues = await githubREST(`/repos/${GITHUB_ORG}/${repo.name}/issues?state=${state}&per_page=50`);
+          return (issues as any[])
+            .filter((i: any) => !i.pull_request)
+            .map((i: any) => ({ ...i, repo: repo.name }));
+        } catch { return []; }
+      });
+      const results = await Promise.all(issuePromises);
+      return results.flat().sort((a: any, b: any) => 
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+    }, 60_000);
+
+    const filtered = repoFilter 
+      ? (allIssues as any[]).filter((i: any) => i.repo === repoFilter)
+      : allIssues;
+    
+    return NextResponse.json(filtered);
   }
 
 
@@ -244,8 +261,24 @@ export async function GET(request: NextRequest) {
 
     // Fetch open + recently closed issues
     const [openIssues, closedIssues] = await Promise.all([
-      cachedFetch('kpi-open', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=open&per_page=100`), 120_000),
-      cachedFetch('kpi-closed', () => githubREST(`/repos/${GITHUB_ORG}/${GITHUB_REPO}/issues?state=closed&per_page=100&since=${weekAgo}`), 120_000),
+      cachedFetch('kpi-open', async () => {
+        const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+        const active = (repos as any[]).filter((r: any) => !r.archived);
+        const all = await Promise.all(active.map(async (r: any) => {
+          try { return await githubREST(`/repos/${GITHUB_ORG}/${r.name}/issues?state=open&per_page=50`); }
+          catch { return []; }
+        }));
+        return all.flat().filter((i: any) => !i.pull_request);
+      }, 120_000),
+      cachedFetch('kpi-closed', async () => {
+        const repos = await githubREST(`/orgs/${GITHUB_ORG}/repos?type=all&per_page=100`);
+        const active = (repos as any[]).filter((r: any) => !r.archived);
+        const all = await Promise.all(active.map(async (r: any) => {
+          try { return await githubREST(`/repos/${GITHUB_ORG}/${r.name}/issues?state=closed&per_page=50&since=${weekAgo}`); }
+          catch { return []; }
+        }));
+        return all.flat().filter((i: any) => !i.pull_request);
+      }, 120_000),
     ]);
 
     const openArr = Array.isArray(openIssues) ? openIssues.filter((i: any) => !i.pull_request) : [];
